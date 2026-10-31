@@ -1,0 +1,14 @@
+{
+  "brand": "scale-simulator",
+  "appName": "Scale Simulator",
+  "productName": "Scale Simulator",
+  "identifier": "br.com.wkarts.scale-simulator-tauri",
+  "publisher": "WK Arts",
+  "theme": "scale-blue",
+  "transparentAssets": true,
+  "version": "0.1.11",
+  "artifactPrefix": "scale-simulator",
+  "windowTitle": "Scale Simulator",
+  "description": "Simulador de balanças TCP e RS232 para testes de integração.",
+  "localDataDir": "scale_simulator_tauri"
+}
