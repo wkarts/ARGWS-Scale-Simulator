@@ -10,7 +10,7 @@ A release automática aguarda o CI de um push em main/develop. Disparo manual pe
 
 ## Artefatos
 
-Windows x64/x86, Linux x64, macOS Intel/Apple Silicon, Web e fontes. A publicação ocorre num único job somente após todos os builds. SHA256SUMS.txt e RELEASE-MANIFEST.json registram integridade, versão e commit. Não é publicada uma release parcial. Reexecução reutiliza a tag exata; releases já publicadas não têm assets sobrescritos.
+Windows x64/x86, Linux x64, macOS Intel/Apple Silicon, Web e fontes. Os arquivos são reunidos num rascunho da própria release, sem depender da cota de artefatos do Actions. A publicação ocorre num único job somente após todos os builds. Se houver falha, o rascunho não é publicado. Novas tentativas aceitam assets existentes somente se o SHA-256 for idêntico. SHA256SUMS.txt e RELEASE-MANIFEST.json registram integridade, versão e commit. Não é publicada uma release parcial. Reexecução reutiliza a tag exata; releases já publicadas não têm assets sobrescritos.
 
 ## Cache
 

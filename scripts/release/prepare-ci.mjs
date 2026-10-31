@@ -18,4 +18,14 @@ if (p.existing) {
   git('tag','-a',p.tag,'-m',`Scale Simulator ${p.version}\nSource: ${source}`);
   git('push','origin',`refs/tags/${p.tag}`);
 }
+// Stage binaries in a draft release, not in the account's Actions artifact quota.
+const gh = (...args) => run('gh', args, { encoding: 'utf8' });
+let existingRelease;
+try { existingRelease = JSON.parse(gh('release','view',p.tag,'--json','isDraft')); }
+catch (error) {
+  // Only a confirmed not-found permits creation. Authentication/network errors stop.
+  const stderr = String(error.stderr || '');
+  if (!/release not found|HTTP 404/i.test(stderr)) throw error;
+  gh('release','create',p.tag,'--verify-tag','--draft','--title',`Scale Simulator ${p.tag}`,'--generate-notes',...(p.prerelease ? ['--prerelease'] : []));
+}
 fs.appendFileSync(process.env.GITHUB_OUTPUT,`tag=${p.tag}\nversion=${p.version}\nprerelease=${p.prerelease}\n`);

@@ -37,9 +37,12 @@ jobs:
       - run: npm run build:web
       - id: prepare
         env:
+          GH_TOKEN: ${{ github.token }}
           GITHUB_REF_NAME: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: node scripts/release/prepare-ci.mjs
   desktop:
+    permissions:
+      contents: write
     needs: prepare
     strategy:
       fail-fast: true
@@ -77,7 +80,7 @@ jobs:
         run: '"CARGO_TARGET_DIR=C:\scale-target" >> $env:GITHUB_ENV'
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> ${{ runner.os == 'Windows' && 'C:/scale-target' || 'target' }}"
           key: release-${{ matrix.target }}
       - run: npm ci --no-audit --no-fund
       - run: node scripts/ci/check-version-sync.mjs --tag ${{ needs.prepare.outputs.tag }}
@@ -88,13 +91,14 @@ jobs:
           TARGET: ${{ matrix.target }}
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
         run: python scripts/release/collect-assets.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-${{ matrix.target }}
-          path: release-assets/*
-          if-no-files-found: error
-          retention-days: 7
+      - name: Upload verified bundles to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: node scripts/release/upload-draft-assets.mjs
   web:
+    permissions:
+      contents: write
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -113,11 +117,11 @@ jobs:
           mkdir release-assets
           (cd dist && zip -qr ../release-assets/Scale-Simulator-${VERSION}-web.zip .)
           git archive --format=zip -o release-assets/Scale-Simulator-${VERSION}-sources.zip HEAD
-      - uses: actions/upload-artifact@v4
-        with:
-          name: web-sources
-          path: release-assets/*
-          retention-days: 7
+      - name: Upload web and sources to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: node scripts/release/upload-draft-assets.mjs
   publish:
     needs: [prepare, desktop, web]
     runs-on: ubuntu-latest
@@ -128,10 +132,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.tag }}
-      - uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-          merge-multiple: true
+      - name: Collect all completed platform assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: gh release download "$TAG" --dir release-assets
       - name: Checksums and manifest
         env:
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
@@ -142,10 +147,14 @@ jobs:
           TAG: ${{ needs.prepare.outputs.tag }}
           PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release already exists: no assets will be overwritten."
+          STATE=$(gh release view "$TAG" --json isDraft --jq .isDraft)
+          if [ "$STATE" = "false" ]; then
+            echo "Release already published: no assets will be overwritten."
             exit 0
           fi
-          FLAGS=()
-          if [ "$PRERELEASE" = "true" ]; then FLAGS+=(--prerelease --latest=false); else FLAGS+=(--latest); fi
-          gh release create "$TAG" release-assets/* --verify-tag --title "Scale Simulator $TAG" --generate-notes "${FLAGS[@]}"
+          RELEASE_TAG="$TAG" node scripts/release/upload-draft-assets.mjs
+          if [ "$PRERELEASE" = "true" ]; then
+            gh release edit "$TAG" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$TAG" --draft=false --prerelease=false --latest
+          fi
