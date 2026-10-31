@@ -166,6 +166,10 @@ jobs:
 
       - name: Playground and simulator regression
         run: node --test tests/*.test.mjs
+      - name: Install component-test browser
+        run: npx playwright install --with-deps chromium
+      - name: Compact model controls at desktop/mobile widths
+        run: npm run test:models:browser
 
       - name: Store Web/PWA for dependent checks outside pull requests
         if: github.event_name != 'pull_request'

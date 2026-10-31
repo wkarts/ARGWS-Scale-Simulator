@@ -67,7 +67,8 @@
     "deps:linux:cloudpanel:x86": "bash ./scripts/linux/install-cloudpanel-build-deps.sh --x86",
     "build:windows:project-target": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/windows/build-windows.ps1 -UseProjectCargoTarget",
     "build:windows:short-target": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/windows/build-windows.ps1",
-    "build:windows:ci-fast": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/windows/build-windows.ps1 -SkipRustChecks -InstallMode Ci"
+    "build:windows:ci-fast": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/windows/build-windows.ps1 -SkipRustChecks -InstallMode Ci",
+    "test:models:browser": "node tests/saved-models.browser.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",
@@ -84,7 +85,8 @@
     "semantic-release": "^25.0.3",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^7.1.0",
-    "@semantic-release/git": "^10.0.1"
+    "@semantic-release/git": "^10.0.1",
+    "playwright": "1.55.1"
   },
   "license": "UNLICENSED"
 }
