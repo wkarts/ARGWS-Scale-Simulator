@@ -6,7 +6,9 @@ mod frame_test_overrides;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use std::io::{self, Read, Write};
+use std::io;
+#[cfg(not(target_os = "ios"))]
+use std::io::{Read, Write};
 use std::net::TcpListener as StdTcpListener;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
@@ -652,6 +654,7 @@ impl ScaleSimulatorMode {
     }
 }
 
+#[cfg(not(target_os = "ios"))]
 fn list_serial_ports_with_usage() -> Result<Vec<ScaleSimulatorSerialPortInfo>, String> {
     let ports = serialport::available_ports().map_err(|err| {
         format!("Falha ao identificar portas seriais RS232/COM do computador: {err}")
@@ -713,6 +716,7 @@ fn list_serial_ports_with_usage() -> Result<Vec<ScaleSimulatorSerialPortInfo>, S
     Ok(items)
 }
 
+#[cfg(not(target_os = "ios"))]
 fn build_serial_port_display_name(
     port_name: &str,
     description: Option<&str>,
@@ -732,10 +736,12 @@ fn build_serial_port_display_name(
     parts.join(" · ")
 }
 
+#[cfg(not(target_os = "ios"))]
 fn compare_serial_port_names(left: &str, right: &str) -> std::cmp::Ordering {
     serial_port_sort_key(left).cmp(&serial_port_sort_key(right))
 }
 
+#[cfg(not(target_os = "ios"))]
 fn serial_port_sort_key(port_name: &str) -> (String, u32, String) {
     let trimmed = port_name.trim().to_ascii_uppercase();
     let prefix = trimmed
@@ -781,6 +787,7 @@ fn serial_settings(config: &ScaleSimulatorConfig) -> (u8, &str, u8) {
     )
 }
 
+#[cfg(not(target_os = "ios"))]
 fn serial_builder(config: &ScaleSimulatorConfig) -> serialport::SerialPortBuilder {
     let (bits, parity, stop) = serial_settings(config);
     serialport::new(config.serial_port.trim(), config.baud_rate)
@@ -803,6 +810,7 @@ fn serial_builder(config: &ScaleSimulatorConfig) -> serialport::SerialPortBuilde
         })
 }
 
+#[cfg(not(target_os = "ios"))]
 fn preflight_serial_port(config: &ScaleSimulatorConfig) -> Result<(), String> {
     let serial_name = config.serial_port.trim();
     let builder = serial_builder(config);
@@ -1006,6 +1014,7 @@ async fn handle_tcp_client(
     push_log(&logs, "info", "Cliente TCP desconectado.".to_string());
 }
 
+#[cfg(not(target_os = "ios"))]
 fn run_serial_loop(
     config: ScaleSimulatorConfig,
     state: Arc<Mutex<ScaleState>>,
@@ -1316,4 +1325,32 @@ fn push_log(logs: &Arc<Mutex<VecDeque<ScaleSimulatorLogEntry>>>, level: &str, me
             message,
         });
     }
+}
+
+// iOS does not expose macOS IOKit serial enumeration. Keep desktop RS232
+// untouched; fail explicitly before allocating a runtime on iOS.
+#[cfg(target_os = "ios")]
+fn list_serial_ports_with_usage() -> Result<Vec<ScaleSimulatorSerialPortInfo>, String> {
+    Err(
+        "RS232 local não está disponível no iOS. Use um backend desktop para a porta serial."
+            .into(),
+    )
+}
+#[cfg(target_os = "ios")]
+fn preflight_serial_port(_config: &ScaleSimulatorConfig) -> Result<(), String> {
+    Err("RS232 local não está disponível no iOS. Conecte ao backend desktop para simular essa porta.".into())
+}
+#[cfg(target_os = "ios")]
+fn run_serial_loop(
+    _config: ScaleSimulatorConfig,
+    _state: Arc<Mutex<ScaleState>>,
+    _clients: Arc<AtomicUsize>,
+    _shutdown: Arc<AtomicBool>,
+    logs: Arc<Mutex<VecDeque<ScaleSimulatorLogEntry>>>,
+) {
+    push_log(
+        &logs,
+        "error",
+        "RS232 local indisponível no iOS; nenhuma porta foi aberta.".into(),
+    );
 }

@@ -22,3 +22,6 @@ Build/typecheck Web, 22 testes de release, 2 testes de Playground, check Rust he
 
 ## Rollback
 Antes de testar, faça backup do banco e da configuração. Não exclua o banco original para resolver login. Preserve o instalador estável. Se necessário, encerre a pré-release e volte à versão estável com seu banco compatível; dados criados exclusivamente na nova versão precisam de avaliação antes de qualquer restauração. Não usar cópia de arquivo enquanto a aplicação anterior ainda mantém WAL ativo.
+
+## Limite específico de iOS
+iOS 15 ou superior não expõe a enumeração serial IOKit de macOS. O build iOS não incorpora essa dependência; operações RS232 locais falham explicitamente antes de criar uma instância. Para serial, use o backend desktop autenticado. Windows/Linux/macOS mantêm o código serial original. TCP e controles remotos continuam disponíveis.

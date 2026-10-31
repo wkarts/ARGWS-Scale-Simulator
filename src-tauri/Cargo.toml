@@ -49,4 +49,5 @@ futures-util = "0.3"
 mysql = { version = "25", optional = true }
 postgres = { version = "0.19", optional = true }
 
+[target.'cfg(not(target_os = "ios"))'.dependencies]
 serialport = "4.6"

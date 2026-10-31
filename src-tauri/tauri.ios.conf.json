@@ -5,5 +5,10 @@
       "mobile"
     ]
   },
-  "identifier": "br.com.wkarts.scale-simulator-tauri"
+  "identifier": "br.com.wkarts.scale-simulator-tauri",
+  "bundle": {
+    "iOS": {
+      "minimumSystemVersion": "15.0"
+    }
+  }
 }
