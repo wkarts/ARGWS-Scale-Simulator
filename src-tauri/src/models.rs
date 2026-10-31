@@ -21,6 +21,11 @@ pub struct AuthUser {
     pub administrador: bool,
     pub master_user: bool,
     pub senha_provisoria: bool,
+    pub api_access_enabled: bool,
+    pub mobile_access_enabled: bool,
+    pub api_session_timeout_minutes: i64,
+    pub local_guest: bool,
+    pub session_channel: Option<String>,
     pub permission_keys: Vec<String>,
     pub profile_names: Vec<String>,
     pub company_ids: Vec<i64>,
@@ -31,6 +36,11 @@ pub struct AuthUser {
 pub struct SessionIdentity {
     pub user_id: i64,
     pub master_user: bool,
+    pub senha_provisoria: bool,
+    pub api_access_enabled: bool,
+    pub mobile_access_enabled: bool,
+    pub local_guest: bool,
+    pub channel: String,
 }
 
 #[derive(Debug, Serialize)]

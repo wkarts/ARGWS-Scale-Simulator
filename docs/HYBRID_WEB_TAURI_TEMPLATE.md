@@ -1,4 +1,4 @@
-# Template App Tauri Desktop Web
+# Scale Simulator Tauri Desktop Web
 
 Este template foi evoluído para operar como uma aplicação híbrida com uma única base visual e funcional para Web, PWA e Tauri.
 
@@ -50,12 +50,11 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-## Usuário padrão Web/PWA
+## Autenticação Web/PWA
 
-```text
-Login: admin
-Senha: admin123
-```
+O provider Web/PWA não publica nem cria uma credencial administrativa fixa. Em produção, a
+autenticação deve usar a API interna/headless, que compartilha o banco migrado e o bootstrap
+aleatório da instalação.
 
 ## Diagnóstico
 

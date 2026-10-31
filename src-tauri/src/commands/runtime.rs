@@ -1,21 +1,17 @@
-use std::{env, process::Command};
-
-#[cfg(target_os = "linux")]
-use std::path::PathBuf;
-
 use base64::{engine::general_purpose, Engine as _};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::{
     app_state::SharedState,
-    internal_api::{config::InternalApiConfig, server},
+    internal_api::{config::InternalApiConfig, server, web_server},
     runtime_config::{self, RuntimeSettings},
 };
 
 #[tauri::command]
 pub fn internal_api_status(state: State<'_, SharedState>) -> Result<Value, String> {
     let status = server::status()?;
+    let web_status = web_server::status().ok();
     let settings_payload = runtime_config::load_settings(state.inner())?;
     let settings = settings_payload.settings;
     let docs_url = status
@@ -40,6 +36,7 @@ pub fn internal_api_status(state: State<'_, SharedState>) -> Result<Value, Strin
         "settings": settings,
         "ports": settings_payload.ports,
         "warnings": settings_payload.warnings,
+        "web_server": web_status,
         "recent_logs": recent_internal_api_logs(state.inner()).unwrap_or_default(),
     }))
 }
@@ -94,31 +91,58 @@ pub fn runtime_settings_save(
     state: State<'_, SharedState>,
     settings: RuntimeSettings,
 ) -> Result<Value, String> {
-    let should_restart =
-        settings.internal_api_restart_on_config_change && server::status()?.running;
+    let api_was_running = server::status()?.running;
+    let web_was_running = web_server::status()?.running;
+    let webhook_was_running = crate::native_webhook::server::status()
+        .map(|status| status.running)
+        .unwrap_or(false);
+    let websocket_was_running = crate::native_websocket::server::status()
+        .map(|status| status.running)
+        .unwrap_or(false);
+    let should_restart_api = settings.internal_api_restart_on_config_change && api_was_running;
+
     let saved = runtime_config::save_settings(state.inner(), settings)?;
-    if should_restart {
+
+    if should_restart_api {
         let _ = server::stop_background();
         let config = runtime_config::resolve_internal_api_config(state.inner())?;
         let _ = server::start_background(state.inner().clone(), config)?;
     }
+
+    if web_was_running || saved.settings.local_web_auto_start {
+        let _ = web_server::stop_background();
+        if saved.settings.local_web_enabled && saved.settings.local_web_auto_start {
+            let _ = web_server::start_background(state.inner().clone());
+        }
+    }
+
+    if webhook_was_running || saved.settings.webhook_auto_start {
+        let _ = crate::native_webhook::server::stop_background();
+        if saved.settings.webhook_enabled && saved.settings.webhook_auto_start {
+            let _ = crate::native_webhook::server::start_background(state.inner().clone());
+        }
+    }
+
+    if websocket_was_running || saved.settings.websocket_auto_start {
+        let _ = crate::native_websocket::server::stop_background();
+        if saved.settings.websocket_enabled && saved.settings.websocket_auto_start {
+            let _ = crate::native_websocket::server::start_background(state.inner().clone());
+        }
+    }
+
     Ok(json!({
         "env_path": saved.env_path,
         "settings": saved.settings,
         "ports": saved.ports,
         "warnings": saved.warnings,
-        "restarted": should_restart,
+        "restarted": should_restart_api,
     }))
 }
 
 #[tauri::command]
 pub fn internal_api_test_port(host: String, port: u16) -> Result<Value, String> {
     let available = runtime_config::is_port_available(&host, port);
-    let suggested_port = if available {
-        port
-    } else {
-        runtime_config::find_available_port(&host, port.saturating_add(1))
-    };
+    let suggested_port = port;
     Ok(json!({
         "host": host,
         "port": port,
@@ -129,7 +153,8 @@ pub fn internal_api_test_port(host: String, port: u16) -> Result<Value, String> 
 
 #[tauri::command]
 pub fn internal_api_test(base_url: String, timeout_ms: Option<u64>) -> Result<Value, String> {
-    let url = format!("{}/health", base_url.trim_end_matches('/'));
+    let safe_base_url = normalize_client_base_url(&base_url);
+    let url = format!("{}/health", safe_base_url.trim_end_matches('/'));
     let timeout = std::time::Duration::from_millis(timeout_ms.unwrap_or(8000).max(1000));
     let client = reqwest::blocking::Client::builder()
         .timeout(timeout)
@@ -145,57 +170,42 @@ pub fn internal_api_test(base_url: String, timeout_ms: Option<u64>) -> Result<Va
 }
 
 #[tauri::command]
+pub fn web_proxy_status() -> Result<Value, String> {
+    serde_json::to_value(web_server::status()?).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub fn web_proxy_start(state: State<'_, SharedState>) -> Result<Value, String> {
+    serde_json::to_value(web_server::start_background(state.inner().clone())?)
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub fn web_proxy_stop() -> Result<Value, String> {
+    serde_json::to_value(web_server::stop_background()?).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub fn web_proxy_restart(state: State<'_, SharedState>) -> Result<Value, String> {
+    let _ = web_server::stop_background();
+    web_proxy_start(state)
+}
+
+#[tauri::command]
 pub fn runtime_env_example() -> Result<String, String> {
     Ok(runtime_config::default_env_template())
 }
 
 #[tauri::command]
 pub fn startup_with_windows_set(enabled: bool) -> Result<Value, String> {
-    #[cfg(target_os = "windows")]
-    {
-        let exe = current_exe_string()?;
-        let app_name =
-            env::var("TEMPLATE_APP_STARTUP_NAME").unwrap_or_else(|_| "TemplateApp".to_string());
-        if enabled {
-            run_command(
-                "reg.exe",
-                &[
-                    "add",
-                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
-                    "/v",
-                    &app_name,
-                    "/t",
-                    "REG_SZ",
-                    "/d",
-                    &format!("\"{exe}\""),
-                    "/f",
-                ],
-                "startup-enable",
-            )
-        } else {
-            run_command(
-                "reg.exe",
-                &[
-                    "delete",
-                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
-                    "/v",
-                    &app_name,
-                    "/f",
-                ],
-                "startup-disable",
-            )
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Ok(json!({
-            "action": if enabled { "startup-enable" } else { "startup-disable" },
-            "implemented": false,
-            "message": "Inicialização automática pelo Windows só é aplicada no Windows. A preferência permanece em runtime.settings."
-        }))
-    }
+    Ok(json!({
+        "action": if enabled { "startup-enable" } else { "startup-disable" },
+        "implemented": false,
+        "status": "managed-by-installer",
+        "message": "Inicialização com o sistema não executa cmd, PowerShell, reg.exe, sc.exe ou shell dentro da aplicação. A preferência deve ser aplicada pelo instalador/serviço nativo do aplicativo derivado.",
+        "requested": enabled
+    }))
 }
-
 #[tauri::command]
 pub fn app_service_install() -> Result<Value, String> {
     service_action("install")
@@ -224,95 +234,23 @@ pub fn app_service_status() -> Result<Value, String> {
 }
 
 fn service_action(action: &str) -> Result<Value, String> {
-    #[cfg(target_os = "windows")]
-    {
-        windows_service_action(action)
-    }
-    #[cfg(target_os = "linux")]
-    {
-        linux_service_action(action)
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    {
-        Ok(json!({
-            "action": action,
-            "implemented": false,
-            "status": "unsupported-platform",
-            "message": "Serviço nativo preparado apenas para Windows e Linux/systemd nesta etapa."
-        }))
-    }
+    Ok(json!({
+        "action": action,
+        "implemented": false,
+        "status": "managed-by-installer",
+        "message": "A aplicação não executa comandos externos para instalar/iniciar/parar serviços. Use o instalador, um helper nativo dedicado ou o serviço do app derivado. Isso remove dependência de cmd, PowerShell, sc.exe e systemctl em tempo de execução."
+    }))
 }
-
-#[cfg(target_os = "windows")]
-fn windows_service_action(action: &str) -> Result<Value, String> {
-    let service_name =
-        env::var("TEMPLATE_APP_SERVICE_NAME").unwrap_or_else(|_| "TemplateAppServer".to_string());
-    match action {
-        "install" => {
-            let exe = current_exe_string()?;
-            run_command(
-                "sc.exe",
-                &[
-                    "create",
-                    &service_name,
-                    "binPath=",
-                    &format!("\"{exe}\" --mode=headless-api"),
-                    "start=",
-                    "auto",
-                    "DisplayName=",
-                    "Template App Server",
-                ],
-                action,
-            )
-        }
-        "uninstall" => run_command("sc.exe", &["delete", &service_name], action),
-        "start" => run_command("sc.exe", &["start", &service_name], action),
-        "stop" => run_command("sc.exe", &["stop", &service_name], action),
-        "status" => run_command("sc.exe", &["query", &service_name], action),
-        other => Err(format!("Ação de serviço Windows inválida: {other}")),
+fn normalize_client_base_url(base_url: &str) -> String {
+    let trimmed = base_url.trim();
+    if trimmed.is_empty() {
+        return "http://127.0.0.1:61001".to_string();
     }
-}
-
-#[cfg(target_os = "linux")]
-fn linux_service_action(action: &str) -> Result<Value, String> {
-    let service_name =
-        env::var("TEMPLATE_APP_SERVICE_NAME").unwrap_or_else(|_| "template-app-server".to_string());
-    let unit_name = format!("{service_name}.service");
-    match action {
-        "install" => {
-            let exe = current_exe_string()?;
-            let unit = format!(
-                "[Unit]\nDescription=Template App Server\nAfter=network.target\n\n[Service]\nExecStart={exe} --mode=headless-api\nRestart=always\nEnvironment=APP_ENV=production\n\n[Install]\nWantedBy=multi-user.target\n"
-            );
-            let unit_path = PathBuf::from("/etc/systemd/system").join(&unit_name);
-            std::fs::write(&unit_path, unit).map_err(|err| {
-                format!(
-                    "Falha ao gravar unit systemd em {}: {err}",
-                    unit_path.display()
-                )
-            })?;
-            let reload = run_command("systemctl", &["daemon-reload"], "daemon-reload")?;
-            let enable = run_command("systemctl", &["enable", &unit_name], "enable")?;
-            Ok(
-                json!({"action": action, "implemented": true, "unit": unit_path, "reload": reload, "enable": enable}),
-            )
-        }
-        "uninstall" => {
-            let _ = run_command("systemctl", &["disable", &unit_name], "disable");
-            let unit_path = PathBuf::from("/etc/systemd/system").join(&unit_name);
-            if unit_path.exists() {
-                std::fs::remove_file(&unit_path).map_err(|err| {
-                    format!("Falha ao remover unit {}: {err}", unit_path.display())
-                })?;
-            }
-            let reload = run_command("systemctl", &["daemon-reload"], "daemon-reload")?;
-            Ok(json!({"action": action, "implemented": true, "unit": unit_path, "reload": reload}))
-        }
-        "start" => run_command("systemctl", &["start", &unit_name], action),
-        "stop" => run_command("systemctl", &["stop", &unit_name], action),
-        "status" => run_command("systemctl", &["status", &unit_name, "--no-pager"], action),
-        other => Err(format!("Ação de serviço Linux inválida: {other}")),
-    }
+    trimmed
+        .replace("http://0.0.0.0:", "http://127.0.0.1:")
+        .replace("https://0.0.0.0:", "https://127.0.0.1:")
+        .replace("http://[::]:", "http://127.0.0.1:")
+        .replace("https://[::]:", "https://127.0.0.1:")
 }
 
 fn recent_internal_api_logs(state: &SharedState) -> Result<Vec<Value>, String> {
@@ -336,29 +274,6 @@ fn recent_internal_api_logs(state: &SharedState) -> Result<Vec<Value>, String> {
         logs.push(row.map_err(|err| err.to_string())?);
     }
     Ok(logs)
-}
-
-fn current_exe_string() -> Result<String, String> {
-    env::current_exe()
-        .map_err(|err| format!("Falha ao resolver executável atual: {err}"))
-        .map(|path| path.to_string_lossy().to_string())
-}
-
-fn run_command(program: &str, args: &[&str], action: &str) -> Result<Value, String> {
-    let output = Command::new(program)
-        .args(args)
-        .output()
-        .map_err(|err| format!("Falha ao executar {program}: {err}"))?;
-    Ok(json!({
-        "action": action,
-        "implemented": true,
-        "program": program,
-        "args": args,
-        "success": output.status.success(),
-        "code": output.status.code(),
-        "stdout": String::from_utf8_lossy(&output.stdout).to_string(),
-        "stderr": String::from_utf8_lossy(&output.stderr).to_string()
-    }))
 }
 
 #[tauri::command]
@@ -416,7 +331,7 @@ fn build_print_document(html: String, title: &str) -> String {
 <body>
   <section class="shell">
     <header>
-      <div><h1>{title}</h1><div class="meta">Template App · Preview de impressão</div></div>
+      <div><h1>{title}</h1><div class="meta">Scale Simulator · Preview de impressão</div></div>
       <div class="meta">Gerado em <span id="now"></span></div>
     </header>
     <div class="content">{body}</div>
@@ -430,7 +345,7 @@ fn build_print_document(html: String, title: &str) -> String {
 
 #[tauri::command]
 pub fn tray_status() -> Result<Value, String> {
-    let enabled = std::env::var("TEMPLATE_APP_TRAY_ENABLED")
+    let enabled = std::env::var("SCALE_SIMULATOR_TRAY_ENABLED")
         .ok()
         .map(|value| {
             matches!(

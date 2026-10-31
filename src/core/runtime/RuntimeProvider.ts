@@ -1,5 +1,5 @@
 import { projectConfig } from "../../config/projectConfig";
-import type { PlatformInfo, RuntimeMode } from "./RuntimeTypes";
+import type { NativePlatform, PlatformInfo, RuntimeMode } from "./RuntimeTypes";
 
 declare global {
   interface Window {
@@ -17,6 +17,20 @@ export function isPwaRuntime(): boolean {
     (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
+export function getNativePlatform(): NativePlatform {
+  if (typeof navigator === "undefined") return "unknown";
+  const descriptor = `${navigator.userAgent} ${navigator.platform}`.toLowerCase();
+  if (/android/.test(descriptor)) return "android";
+  if (/iphone|ipad|ipod/.test(descriptor) || (/mac/.test(descriptor) && navigator.maxTouchPoints > 1)) return "ios";
+  if (isTauriRuntime()) return "desktop";
+  return "web";
+}
+
+export function isNativeMobileRuntime(): boolean {
+  const platform = getNativePlatform();
+  return isTauriRuntime() && (platform === "android" || platform === "ios");
+}
+
 export function getRuntimeMode(): RuntimeMode {
   if (isTauriRuntime()) return "tauri";
   if (isPwaRuntime()) return "pwa";
@@ -25,11 +39,16 @@ export function getRuntimeMode(): RuntimeMode {
 
 export function getPlatformInfo(): PlatformInfo {
   const mode = getRuntimeMode();
+  const nativePlatform = getNativePlatform();
+  const isMobile = nativePlatform === "android" || nativePlatform === "ios";
   return {
     mode,
+    nativePlatform,
     isTauri: mode === "tauri",
     isPwa: mode === "pwa",
     isWeb: mode === "web",
+    isMobile,
+    isNativeMobile: mode === "tauri" && isMobile,
     userAgent: navigator.userAgent,
     platform: navigator.platform,
     online: navigator.onLine,

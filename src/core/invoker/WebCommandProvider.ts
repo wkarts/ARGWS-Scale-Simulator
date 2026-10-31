@@ -75,6 +75,16 @@ function requireSession(token: string): Record<string, unknown> {
   return { token };
 }
 
+
+function buildWebPorts(settings: Record<string, unknown>) {
+  return [
+    { key: "internal_api", label: "API interna", host: settings.internal_api_host, configured_port: settings.internal_api_port, effective_port: settings.internal_api_port, default_port: 61001, available: true, fallback_applied: false },
+    { key: "local_web", label: "Servidor web local", host: settings.local_web_host, configured_port: settings.local_web_port, effective_port: settings.local_web_port, default_port: 61002, available: true, fallback_applied: false },
+    { key: "auxiliary", label: "Webhook Service", host: settings.webhook_host ?? settings.auxiliary_host, configured_port: settings.webhook_port ?? settings.auxiliary_port, effective_port: settings.webhook_port ?? settings.auxiliary_port, default_port: 61003, available: true, fallback_applied: false },
+    { key: "bridge_core", label: "WebSocket Service", host: settings.websocket_host ?? settings.bridge_core_host, configured_port: settings.websocket_port ?? settings.bridge_core_port, effective_port: settings.websocket_port ?? settings.bridge_core_port, default_port: 61004, available: true, fallback_applied: false },
+  ];
+}
+
 function tableForEntity(entity: string): string {
   const normalized = (entity || "entity").trim().toLowerCase();
   const aliases: Record<string, string> = {
@@ -301,26 +311,136 @@ export class WebCommandProvider implements CommandProvider {
           internal_api_host: projectConfig.api.host,
           internal_api_port: projectConfig.api.port,
           internal_api_auto_start: projectConfig.api.autoStart,
-          local_web_host: "127.0.0.1",
+          internal_api_base_url: projectConfig.api.baseUrl,
+          internal_api_docs_url: projectConfig.api.scalarUrl,
+          internal_api_restart_on_config_change: projectConfig.api.restartOnConfigChange,
+          internal_api_require_token: projectConfig.api.security.requireToken,
+          internal_api_allow_public_network: projectConfig.api.security.allowPublicNetwork ?? false,
+          internal_api_cors_enabled: projectConfig.api.security.corsEnabled ?? false,
+          internal_api_token_header: projectConfig.api.security.tokenHeader,
+          internal_api_token: "",
+          internal_api_docs_public_local: projectConfig.api.security.docsPublicLocal,
+          internal_api_open_scalar_after_start: projectConfig.api.openScalarAfterStart,
+          internal_api_timeout_ms: projectConfig.api.timeoutMs,
+          internal_api_log_mode: projectConfig.api.logMode,
+          internal_api_docs_enabled: projectConfig.api.docs,
+          internal_api_docs_path: projectConfig.api.docsPath,
+          local_web_enabled: true,
+          local_web_auto_start: true,
+          local_web_host: "0.0.0.0",
           local_web_port: 61002,
-          auxiliary_host: "127.0.0.1",
+          auxiliary_host: "0.0.0.0",
           auxiliary_port: 61003,
-          bridge_core_host: "127.0.0.1",
+          bridge_core_host: "0.0.0.0",
           bridge_core_port: 61004,
+          webhook_enabled: false,
+          webhook_auto_start: false,
+          webhook_host: "0.0.0.0",
+          webhook_port: 61003,
+          webhook_base_path: "/webhooks",
+          webhook_token_required: true,
+          webhook_token_header: "X-Webhook-Token",
+          webhook_token: "",
+          webhook_allow_lan: true,
+          webhook_allow_external: false,
+          websocket_enabled: false,
+          websocket_auto_start: false,
+          websocket_host: "0.0.0.0",
+          websocket_port: 61004,
+          websocket_path: "/ws",
+          websocket_token_required: true,
+          websocket_token_query: "token",
+          websocket_token_header: "X-WebSocket-Token",
+          websocket_token: "",
+          websocket_allow_lan: true,
+          websocket_allow_external: false,
+          websocket_heartbeat_seconds: 30,
           tray_enabled: projectConfig.tray.enabled,
           minimize_to_tray: projectConfig.tray.minimizeToTray,
           close_to_tray: projectConfig.tray.closeToTray,
           start_with_windows: false,
           services_auto_start: false,
+          app_service_name: "ScaleSimulatorServer",
         };
-        return { env_path: "localStorage:runtime-settings", settings, ports: [], warnings: ["Modo Web/PWA: portas e tray são apenas simulados."] } as T;
+        return { env_path: "localStorage:runtime-settings", settings, ports: buildWebPorts(settings), warnings: ["Modo Web/PWA: portas e tray são simulados; use API remota/Tauri para serviços reais."] } as T;
       }
 
       case "runtime_settings_save": {
-        const settings = asRecord(args).settings || {};
+        const settings = asRecord(asRecord(args).settings || {});
         window.localStorage.setItem(storageKey("runtime-settings"), JSON.stringify(settings));
-        return { env_path: "localStorage:runtime-settings", settings, ports: [], warnings: ["Modo Web/PWA: configuração persistida no navegador."] } as T;
+        return { env_path: "localStorage:runtime-settings", settings, ports: buildWebPorts(settings), warnings: ["Modo Web/PWA: configuração persistida no navegador."] } as T;
       }
+
+      case "webhook_status": {
+        const raw = window.localStorage.getItem(storageKey("webhook-status"));
+        return (raw ? JSON.parse(raw) : { running: false, runtime: "web", host: "0.0.0.0", port: 61003, base_path: "/webhooks", events_count: 0, message: "Webhook Service real depende do runtime Tauri/headless." }) as T;
+      }
+
+      case "webhook_start": {
+        const status = { running: false, simulated: true, runtime: "web", host: "0.0.0.0", port: 61003, url: "http://127.0.0.1:61003", base_path: "/webhooks", events_count: 0, message: "Modo Web não inicia Webhook Service local. Use Tauri/headless para serviço real." };
+        window.localStorage.setItem(storageKey("webhook-status"), JSON.stringify(status));
+        return status as T;
+      }
+
+      case "webhook_stop": {
+        const status = { running: false, simulated: true, runtime: "web", host: "0.0.0.0", port: 61003, base_path: "/webhooks", events_count: 0, message: "Webhook Service simulado parado no modo Web." };
+        window.localStorage.setItem(storageKey("webhook-status"), JSON.stringify(status));
+        return status as T;
+      }
+
+      case "webhook_restart":
+        return this.invoke("webhook_start", args) as T;
+
+      case "webhook_list_events": {
+        const raw = window.localStorage.getItem(storageKey("webhook-events"));
+        return { items: raw ? JSON.parse(raw) : [] } as T;
+      }
+
+      case "webhook_clear_events":
+        window.localStorage.removeItem(storageKey("webhook-events"));
+        return true as T;
+
+      case "webhook_test_receive": {
+        const record = {
+          id: Date.now(),
+          provider: getString(args, "provider", "manual"),
+          event: getString(args, "event", "test"),
+          status: "received",
+          payload_json: asRecord(args).payload ?? { message: "Teste Web/PWA" },
+          received_at: new Date().toISOString(),
+        };
+        const raw = window.localStorage.getItem(storageKey("webhook-events"));
+        const events = raw ? JSON.parse(raw) : [];
+        events.unshift(record);
+        window.localStorage.setItem(storageKey("webhook-events"), JSON.stringify(events.slice(0, 100)));
+        return { ok: true, event: record } as T;
+      }
+
+      case "websocket_status": {
+        const raw = window.localStorage.getItem(storageKey("websocket-status"));
+        return (raw ? JSON.parse(raw) : { running: false, runtime: "web", host: "0.0.0.0", port: 61004, path: "/ws", clients_count: 0, message: "WebSocket Service real depende do runtime Tauri/headless." }) as T;
+      }
+
+      case "websocket_start": {
+        const status = { running: false, simulated: true, runtime: "web", host: "0.0.0.0", port: 61004, url: "ws://127.0.0.1:61004/ws", path: "/ws", clients_count: 0, message: "Modo Web não inicia WebSocket Service local. Use Tauri/headless para serviço real." };
+        window.localStorage.setItem(storageKey("websocket-status"), JSON.stringify(status));
+        return status as T;
+      }
+
+      case "websocket_stop": {
+        const status = { running: false, simulated: true, runtime: "web", host: "0.0.0.0", port: 61004, path: "/ws", clients_count: 0, message: "WebSocket Service simulado parado no modo Web." };
+        window.localStorage.setItem(storageKey("websocket-status"), JSON.stringify(status));
+        return status as T;
+      }
+
+      case "websocket_restart":
+        return this.invoke("websocket_start", args) as T;
+
+      case "websocket_list_clients":
+        return { items: [] } as T;
+
+      case "websocket_broadcast_test":
+        return { ok: true, sent: 0, simulated: true, payload: { type: "template.broadcast.test", message: getString(args, "message", "Teste Web/PWA"), sent_at: new Date().toISOString() } } as T;
 
       case "startup_with_windows_set":
         return { implemented: false, runtime: getPlatformInfo().mode, message: "Inicialização com Windows indisponível no navegador." } as T;
@@ -329,6 +449,14 @@ export class WebCommandProvider implements CommandProvider {
         const raw = window.localStorage.getItem(storageKey("internal-api-status"));
         return (raw ? JSON.parse(raw) : { running: false, runtime: "web", host: projectConfig.api.host, port: projectConfig.api.port, message: "No navegador a API interna depende do backend remoto/Tauri." }) as T;
       }
+
+      case "web_proxy_status":
+        return { running: false, runtime: "web", host: "127.0.0.1", port: 61002, message: "Webport real é iniciado pelo runtime Tauri, não pelo navegador puro." } as T;
+
+      case "web_proxy_start":
+      case "web_proxy_stop":
+      case "web_proxy_restart":
+        return { running: false, simulated: true, runtime: "web", message: "Modo Web puro não inicia serviços locais. No Tauri desktop o webport inicia internamente sem cmd/PowerShell." } as T;
 
       case "internal_api_start": {
         const host = getString(args, "host", projectConfig.api.host);
@@ -360,8 +488,10 @@ export class WebCommandProvider implements CommandProvider {
         return { ok: false, warning: "Recurso nativo indisponível no navegador. Configure API remota para execução real." } as T;
 
       case "app_service_status":
+        return { running: false, installed: false, available: false, runtime: getPlatformInfo().mode, message: "Serviço nativo indisponível no navegador." } as T;
+
       case "tray_status":
-        return { running: false, available: false, runtime: getPlatformInfo().mode } as T;
+        return { enabled: false, available: false, runtime: getPlatformInfo().mode, message: "Tray icon é recurso desktop/Tauri." } as T;
 
       case "open_print_preview":
         window.print();

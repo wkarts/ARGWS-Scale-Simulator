@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import AppSwitch from "../components/AppSwitch.vue";
+import BasePage from "../components/base/BasePage.vue";
 import {
   checkLicensingRuntime,
   enableSupportGuardTotp,
@@ -206,19 +207,12 @@ onMounted(loadPage);
 </script>
 
 <template>
-  <div class="grid page-gap licensing-page">
-    <div class="toolbar licensing-header">
-      <div>
-        <h2>Licenciamento</h2>
-        <div class="muted-text">
-          Página dedicada de licenciamento com proteção administrativa reforçada, sem modal bloqueante.
-        </div>
-      </div>
-      <div class="actions wrap">
-        <button class="secondary" :disabled="loading || checking" @click="loadPage">Atualizar</button>
-        <button class="primary" :disabled="checking || loading" @click="runCheck">Validar licença</button>
-      </div>
-    </div>
+  <BasePage title="Licenciamento" subtitle="Página dedicada de licenciamento com proteção administrativa reforçada, sem modal bloqueante." icon="key">
+    <template #actions>
+      <button class="secondary" :disabled="loading || checking" @click="loadPage">Atualizar</button>
+      <button class="primary" :disabled="checking || loading" @click="runCheck">Validar licença</button>
+    </template>
+    <div class="grid page-gap licensing-page">
 
     <div v-if="message" class="alert success">{{ message }}</div>
     <div v-if="error" class="alert error">{{ error }}</div>
@@ -357,4 +351,5 @@ onMounted(loadPage);
       </div>
     </div>
   </div>
+  </BasePage>
 </template>

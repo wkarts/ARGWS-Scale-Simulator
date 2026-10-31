@@ -1,6 +1,6 @@
 import type { DatabaseProvider, TableRecord } from "./DatabaseTypes";
 
-import { appDbName, appBranding } from "../../config/appBranding";
+import { appDbName } from "../../config/appBranding";
 
 const DB_NAME = appDbName();
 const DB_VERSION = 1;
@@ -160,43 +160,7 @@ export class IndexedDbDatabaseProvider implements DatabaseProvider {
       await this.list(table);
     }
 
-    const profiles = await this.list("profiles");
-    if (!profiles.length) {
-      await this.save("profiles", {
-        descricao: "Administrador",
-        name: "Administrador",
-        permissions: ["*"],
-        ativo: true,
-      });
-    }
-
-    const companies = await this.list("companies");
-    if (!companies.length) {
-      await this.save("companies", {
-        razao_social: "Empresa Demonstração",
-        nome_fantasia: appBranding.appName,
-        documento: "00.000.000/0001-00",
-        cidade: "Dom Macedo Costa",
-        estado: "BA",
-        ativo: true,
-      });
-    }
-
-    const users = await this.list("users");
-    if (!users.length) {
-      await this.save("users", {
-        login: "admin",
-        name: "Administrador",
-        nome: "Administrador",
-        email: "admin@local.test",
-        password: "admin123",
-        profile_id: 1,
-        perfil_id: 1,
-        active: true,
-        ativo: true,
-        permissions: ["*"],
-        photo_url: null,
-      });
-    }
+    // O Web/PWA não cria dados demonstrativos nem credencial administrativa pública.
+    // Para autenticação, use o provider da API interna/remota configurado no ambiente.
   }
 }

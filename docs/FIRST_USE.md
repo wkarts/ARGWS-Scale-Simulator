@@ -1,4 +1,4 @@
-# Primeiro uso do Template App Tauri
+# Primeiro uso do Scale Simulator Tauri
 
 Este template é uma base corporativa genérica para novas aplicações desktop com Tauri 2, Rust, Vue 3, TypeScript, SQLite, Pinia e Vue Router.
 
@@ -52,16 +52,24 @@ VERSION
 release.config.mjs
 ```
 
-## 4. Usuário inicial obrigatório
+## 4. Primeiro acesso administrativo
 
-O template cria automaticamente o usuário inicial:
+O backend cria o usuário master sem gravar senha temporária no frontend ou em arquivo. No desktop, a aplicação abre a rota de primeiro acesso e permite definir a primeira senha diretamente.
 
-```text
-Usuário: admin
-Senha: admin123
+Para instalações headless, configure antes do primeiro startup:
+
+```env
+SCALE_SIMULATOR_BOOTSTRAP_ADMIN_USERNAME=admin
+SCALE_SIMULATOR_BOOTSTRAP_ADMIN_PASSWORD=SenhaInicialControlada123
 ```
 
-A tela de login não deve exibir essas credenciais. A primeira ação operacional recomendada é trocar a senha do usuário administrador.
+A senha definida por ambiente é tratada como definitiva. Arquivos `.bootstrap-admin.local` deixados por versões antigas são removidos e nunca são recriados.
+
+Quando já existe um administrador legado, a migração preserva seu login e hash de senha, promove-o a master e apenas aplica a senha de ambiente se a credencial anterior ainda estiver marcada como provisória.
+
+A política padrão exige 8 caracteres, uma letra e um número. Maiúscula, minúscula e símbolo são opcionais. O master pode parametrizar a política, respeitando o mínimo técnico de 6 caracteres.
+
+Consulte [`AUTHENTICATION_AND_MOBILE_ACCESS.md`](AUTHENTICATION_AND_MOBILE_ACCESS.md).
 
 ## 5. Módulos opcionais
 

@@ -30,33 +30,93 @@ const defaults: RuntimeSettings = {
   internal_api_restart_on_config_change: true,
   internal_api_require_token: false,
   internal_api_token: "",
+  internal_api_allow_public_network: false,
+  internal_api_cors_enabled: false,
+  internal_api_token_header: "X-App-Token",
   internal_api_docs_public_local: true,
   internal_api_open_scalar_after_start: false,
   internal_api_timeout_ms: 8000,
   internal_api_log_mode: "normal",
   internal_api_docs_enabled: true,
   internal_api_docs_path: "/docs",
-  local_web_host: "127.0.0.1",
+  local_web_enabled: true,
+  local_web_auto_start: true,
+  local_web_host: "0.0.0.0",
   local_web_port: 61002,
-  auxiliary_host: "127.0.0.1",
+  auxiliary_host: "0.0.0.0",
   auxiliary_port: 61003,
-  bridge_core_host: "127.0.0.1",
+  bridge_core_host: "0.0.0.0",
   bridge_core_port: 61004,
+  webhook_enabled: false,
+  webhook_auto_start: false,
+  webhook_host: "0.0.0.0",
+  webhook_port: 61003,
+  webhook_base_path: "/webhooks",
+  webhook_token_required: true,
+  webhook_token_header: "X-Webhook-Token",
+  webhook_token: "",
+  webhook_allow_lan: true,
+  webhook_allow_external: false,
+  websocket_enabled: false,
+  websocket_auto_start: false,
+  websocket_host: "0.0.0.0",
+  websocket_port: 61004,
+  websocket_path: "/ws",
+  websocket_token_required: true,
+  websocket_token_query: "token",
+  websocket_token_header: "X-WebSocket-Token",
+  websocket_token: "",
+  websocket_allow_lan: true,
+  websocket_allow_external: false,
+  websocket_heartbeat_seconds: 30,
   tray_enabled: true,
   minimize_to_tray: true,
   close_to_tray: false,
   start_with_windows: false,
   services_auto_start: false,
+  app_service_name: "ScaleSimulatorServer",
 };
 
 const form = reactive<RuntimeSettings>({ ...defaults });
 
-const baseUrl = computed(() => form.internal_api_base_url || `http://${form.internal_api_host}:${form.internal_api_port}`);
-const docsUrl = computed(() => form.internal_api_docs_url || `${baseUrl.value}${form.internal_api_docs_path || "/docs"}`);
+function browserHostForPublishedService(): string {
+  if (typeof window === "undefined") return "127.0.0.1";
+  const host = window.location.hostname || "127.0.0.1";
+  return host === "localhost" ? "127.0.0.1" : host;
+}
+
+function normalizeClientHost(host: string): string {
+  const trimmed = String(host || "").trim();
+  if (["0.0.0.0", "::", "[::]", "", "127.0.0.1", "localhost"].includes(trimmed)) {
+    return browserHostForPublishedService();
+  }
+  return trimmed;
+}
+
+function normalizeClientUrl(url: string): string {
+  const raw = String(url || "").trim();
+  if (!raw) return `http://${browserHostForPublishedService()}:61001`;
+  try {
+    const parsed = new URL(raw, typeof window !== "undefined" ? window.location.href : "http://127.0.0.1");
+    if (["0.0.0.0", "::", "[::]", "127.0.0.1", "localhost", ""].includes(parsed.hostname)) {
+      parsed.hostname = browserHostForPublishedService();
+    }
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return raw
+      .replace("http://0.0.0.0:", `http://${browserHostForPublishedService()}:`)
+      .replace("https://0.0.0.0:", `https://${browserHostForPublishedService()}:`)
+      .replace("http://127.0.0.1:", `http://${browserHostForPublishedService()}:`)
+      .replace("http://localhost:", `http://${browserHostForPublishedService()}:`);
+  }
+}
+
+const baseUrl = computed(() => normalizeClientUrl(form.internal_api_base_url || `http://${normalizeClientHost(form.internal_api_host)}:${form.internal_api_port}`));
+const docsUrl = computed(() => normalizeClientUrl(form.internal_api_docs_url || `${baseUrl.value}${form.internal_api_docs_path || "/docs"}`));
 const recentLogs = computed(() => Array.isArray(status.value.recent_logs) ? status.value.recent_logs : []);
 
 function syncDerivedUrls() {
-  form.internal_api_base_url = `http://${form.internal_api_host}:${Number(form.internal_api_port || 61001)}`;
+  form.internal_api_base_url = `http://${normalizeClientHost(form.internal_api_host)}:${Number(form.internal_api_port || 61001)}`;
   const docsPath = form.internal_api_docs_path?.startsWith("/") ? form.internal_api_docs_path : `/${form.internal_api_docs_path || "docs"}`;
   form.internal_api_docs_path = docsPath;
   form.internal_api_docs_url = `${form.internal_api_base_url}${docsPath}`;
@@ -179,7 +239,7 @@ onMounted(load);
       </div>
     </BaseSectionCard>
 
-    <BaseSectionCard title="Configuração persistente da API" subtitle="Prioridade: interface/banco local > .env > valores padrão local.">
+    <BaseSectionCard title="Configuração persistente da API" subtitle="Prioridade: interface/banco local > .env > valores padrão do template.">
       <div class="grid columns-4 mobile-columns-1">
         <label class="field"><span>Host da API</span><input v-model="form.internal_api_host" type="text" @change="syncDerivedUrls" /></label>
         <label class="field"><span>Porta da API</span><input v-model.number="form.internal_api_port" type="number" min="1" max="65535" @change="syncDerivedUrls" /></label>

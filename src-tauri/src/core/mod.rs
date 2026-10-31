@@ -25,7 +25,7 @@ pub struct AppFeatureFlags {
 impl Default for AppFeatureFlags {
     fn default() -> Self {
         Self {
-            licensing: true,
+            licensing: false,
             internal_api: false,
             scalar_docs: false,
             tray: true,
@@ -41,7 +41,7 @@ impl Default for AppFeatureFlags {
 pub struct DefaultAdminConfig {
     pub enabled: bool,
     pub username: String,
-    pub password: String,
+    pub bootstrap_strategy: String,
     pub force_password_change_on_first_login: bool,
 }
 
@@ -50,7 +50,7 @@ impl Default for DefaultAdminConfig {
         Self {
             enabled: true,
             username: "admin".to_string(),
-            password: "admin123".to_string(),
+            bootstrap_strategy: "internal".to_string(),
             force_password_change_on_first_login: true,
         }
     }

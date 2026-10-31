@@ -1,12 +1,12 @@
 {
   "name": "Scale Simulator",
   "short_name": "Scale Simulator",
-  "description": "Simulador de balanças TCP e RS232. A comunicação com equipamentos exige o aplicativo desktop.",
+  "description": "Laborat\u00f3rio de balan\u00e7as TCP e RS232",
   "start_url": "/#/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#2563eb",
+  "background_color": "#F3F6FA",
+  "theme_color": "#102E49",
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -17,6 +17,12 @@
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

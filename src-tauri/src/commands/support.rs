@@ -176,8 +176,8 @@ pub fn support_guard_provision(
         "otpauth_url".to_string(),
         Value::from(build_otpauth_url(
             &totp_secret,
-            "Template App:Suporte Admin",
-            "Template App",
+            "Scale Simulator:Suporte Admin",
+            "Scale Simulator",
         )),
     );
     result.insert(

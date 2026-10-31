@@ -1,6 +1,6 @@
 # Etapa 2.1 — Correções funcionais obrigatórias
 
-Esta etapa corrige a versão 0.1.8 da base profissional do Template App Tauri sem remover o fluxo desktop existente.
+Esta etapa corrige a versão 0.1.8 da base profissional do Scale Simulator Tauri sem remover o fluxo desktop existente.
 
 ## Correções aplicadas
 
@@ -11,14 +11,14 @@ Esta etapa corrige a versão 0.1.8 da base profissional do Template App Tauri se
 - API interna passou a validar:
   - `requireToken`;
   - `tokenHeader`;
-  - token via `TEMPLATE_APP_API_TOKEN`;
+  - token via `SCALE_SIMULATOR_API_TOKEN`;
   - bloqueio de `0.0.0.0` quando `allowPublicNetwork=false`;
   - `corsEnabled`;
   - `exposeDocs`.
 - `/docs` e `/openapi.json` só são registrados quando `exposeDocs=true`.
 - Scalar usa tema claro fixo por CSS e não depende do tema visual da aplicação.
-- Tray respeita desativação por variável/configuração de runtime e não é criado quando `TEMPLATE_APP_TRAY_ENABLED=false`.
-- Fechamento para tray é controlado por `TEMPLATE_APP_TRAY_CLOSE_TO_TRAY=true`.
+- Tray respeita desativação por variável/configuração de runtime e não é criado quando `SCALE_SIMULATOR_TRAY_ENABLED=false`.
+- Fechamento para tray é controlado por `SCALE_SIMULATOR_TRAY_CLOSE_TO_TRAY=true`.
 - Preview de impressão agora recebe e renderiza HTML real em janela independente.
 - Comandos de serviço Windows executam `sc.exe`; em Linux, a Etapa 2.2 usa `systemd`.
 - Mensagens sobre MySQL/PostgreSQL/Firebird foram ajustadas para não vender recurso externo como funcional completo.
@@ -26,16 +26,16 @@ Esta etapa corrige a versão 0.1.8 da base profissional do Template App Tauri se
 ## Configurações de ambiente relevantes
 
 ```bash
-TEMPLATE_APP_API_HOST=127.0.0.1
-TEMPLATE_APP_API_PORT=61001
-TEMPLATE_APP_API_REQUIRE_TOKEN=true
-# TEMPLATE_APP_API_TOKEN deve ser fornecido via secret/variável de ambiente segura.
-TEMPLATE_APP_API_TOKEN_HEADER=X-App-Token
-TEMPLATE_APP_API_ALLOW_PUBLIC_NETWORK=false
-TEMPLATE_APP_API_CORS=false
-TEMPLATE_APP_API_EXPOSE_DOCS=true
-TEMPLATE_APP_TRAY_ENABLED=true
-TEMPLATE_APP_TRAY_CLOSE_TO_TRAY=false
+SCALE_SIMULATOR_API_HOST=127.0.0.1
+SCALE_SIMULATOR_API_PORT=61001
+SCALE_SIMULATOR_API_REQUIRE_TOKEN=true
+# SCALE_SIMULATOR_API_TOKEN deve ser fornecido via secret/variável de ambiente segura.
+SCALE_SIMULATOR_API_TOKEN_HEADER=X-App-Token
+SCALE_SIMULATOR_API_ALLOW_PUBLIC_NETWORK=false
+SCALE_SIMULATOR_API_CORS=false
+SCALE_SIMULATOR_API_EXPOSE_DOCS=true
+SCALE_SIMULATOR_TRAY_ENABLED=true
+SCALE_SIMULATOR_TRAY_CLOSE_TO_TRAY=false
 ```
 
 ## Validação executada neste ambiente

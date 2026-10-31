@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const pathSeparator = process.platform === 'win32' ? ';' : ':';
-const isWindows = process.platform === 'win32';
 
 function commandOutput(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -29,7 +28,7 @@ function isUsableCargo(candidate) {
 
 function pathCandidates() {
   const seen = new Set();
-  const executable = isWindows ? 'cargo.exe' : 'cargo';
+  const executable = process.platform === 'win32' ? 'cargo.exe' : 'cargo';
   const candidates = [];
 
   for (const entry of (process.env.PATH || '').split(pathSeparator)) {
@@ -41,6 +40,27 @@ function pathCandidates() {
   }
 
   return candidates;
+}
+
+
+function stableHash(value) {
+  let hash = 0x811c9dc5;
+  for (const char of value) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+function resolveShortCargoTargetDir() {
+  if (process.platform !== 'win32') return process.env.CARGO_TARGET_DIR;
+  if (process.env.CARGO_TARGET_DIR && process.env.CARGO_TARGET_DIR.trim() !== '') {
+    return process.env.CARGO_TARGET_DIR;
+  }
+  if (process.env.TAURI_USE_PROJECT_TARGET === 'true') return undefined;
+
+  const base = process.env.CARGO_TARGET_BASE_DIR || path.join(process.env.TEMP || root, 'tauri-target');
+  return path.join(base, stableHash(root));
 }
 
 function resolveCargo() {
@@ -60,68 +80,68 @@ function resolveCargo() {
   );
 }
 
-function resolveTauriCliInvocation() {
-  const localJs = path.join(root, 'node_modules', '@tauri-apps', 'cli', 'tauri.js');
-  if (fs.existsSync(localJs)) {
-    return {
-      command: process.execPath,
-      argsPrefix: [localJs],
-      label: localJs,
-    };
+function resolveTauriCliScript() {
+  const candidates = [
+    path.join(root, 'node_modules', '@tauri-apps', 'cli', 'tauri.js'),
+    path.join(root, 'node_modules', '@tauri-apps', 'cli', 'index.js'),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
   }
 
-  const binary = isWindows ? 'tauri.cmd' : 'tauri';
-  const localBinary = path.join(root, 'node_modules', '.bin', binary);
-  if (fs.existsSync(localBinary)) {
-    return {
-      command: localBinary,
-      argsPrefix: [],
-      label: localBinary,
-    };
-  }
+  throw new Error(
+    'Tauri CLI local não encontrado em node_modules/@tauri-apps/cli. ' +
+      'Execute npm ci antes do build.',
+  );
+}
 
-  return {
-    command: isWindows ? 'tauri.cmd' : 'tauri',
-    argsPrefix: [],
-    label: isWindows ? 'tauri.cmd' : 'tauri',
-  };
+function runTauriCli(tauriCliScript, args, env) {
+  // Não executar tauri.cmd via cmd.exe. Em Windows com usuário contendo espaço
+  // (ex.: C:\\Users\\Wallace Kleiton), o quoting do cmd pode quebrar.
+  // Executamos diretamente o script JS do @tauri-apps/cli via node, com shell:false.
+  return spawnSync(process.execPath, [tauriCliScript, ...args], {
+    cwd: root,
+    env,
+    stdio: 'inherit',
+    shell: false,
+  });
 }
 
 const cargo = resolveCargo();
 const cargoDir = path.dirname(cargo);
-
-// Importante no Windows:
-// não repasse CARGO com caminho absoluto quando houver espaço em C:\Users\Nome Sobrenome.
-// Algumas etapas internas do Tauri/Cargo acabam usando esse valor em comandos de shell.
-// A solução segura é colocar a pasta do cargo no PATH e usar apenas "cargo".
-const cargoCommandForChild = isWindows ? 'cargo' : cargo;
-
+const cargoTargetDir = resolveShortCargoTargetDir();
 const env = {
   ...process.env,
-  CARGO: cargoCommandForChild,
+  CARGO: process.platform === 'win32' ? 'cargo' : cargo,
   PATH: `${cargoDir}${pathSeparator}${process.env.PATH || ''}`,
+  CARGO_INCREMENTAL: process.env.CARGO_INCREMENTAL || '0',
+  CARGO_TERM_COLOR: process.env.CARGO_TERM_COLOR || 'always',
+  CARGO_NET_RETRY: process.env.CARGO_NET_RETRY || '10',
 };
 
-const args = process.argv.slice(2);
-// Cargo must consume the distributed lockfile instead of resolving newer versions.
-if (['build', 'dev'].includes(args[0])) {
-  const separator = args.indexOf('--');
-  if (separator === -1) args.push('--', '--locked');
-  else args.splice(separator + 1, 0, '--locked');
+if (cargoTargetDir) {
+  fs.mkdirSync(cargoTargetDir, { recursive: true });
+  env.CARGO_TARGET_DIR = cargoTargetDir;
 }
-const tauriInvocation = resolveTauriCliInvocation();
-const tauriArgs = [...tauriInvocation.argsPrefix, ...args];
+
+const args = process.argv.slice(2);
+if (['build','dev','bundle'].includes(args[0]) && !args.includes('--features')) {
+  const divider=args.indexOf('--');
+  args.splice(divider<0?args.length:divider,0,'--features','desktop');
+}
+if (['build','dev'].includes(args[0]) && !args.includes('--locked')) {
+  if (!args.includes('--')) args.push('--');
+  args.splice(args.indexOf('--')+1,0,'--locked');
+}
+const tauriCliScript = resolveTauriCliScript();
 
 console.log(`[tauri-ci] usando cargo: ${cargo}`);
-console.log(`[tauri-ci] CARGO repassado ao Tauri: ${cargoCommandForChild}`);
-console.log(`[tauri-ci] usando Tauri CLI: ${tauriInvocation.label}`);
+console.log(`[tauri-ci] usando tauri cli script: ${tauriCliScript}`);
+console.log(`[tauri-ci] usando node: ${process.execPath}`);
+if (env.CARGO_TARGET_DIR) console.log(`[tauri-ci] CARGO_TARGET_DIR: ${env.CARGO_TARGET_DIR}`);
 
-const result = spawnSync(tauriInvocation.command, tauriArgs, {
-  cwd: root,
-  env,
-  stdio: 'inherit',
-  shell: false,
-});
+const result = runTauriCli(tauriCliScript, args, env);
 
 if (result.error) {
   console.error(`[tauri-ci] falha ao executar Tauri CLI: ${result.error.message}`);

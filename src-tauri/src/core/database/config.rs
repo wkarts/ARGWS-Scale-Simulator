@@ -61,9 +61,9 @@ impl DatabaseConfig {
     pub fn from_env_with_driver(driver: &str) -> Self {
         let parsed_driver = DatabaseDriver::from_str(driver);
         let prefix = match parsed_driver {
-            DatabaseDriver::Mysql => "TEMPLATE_APP_MYSQL",
-            DatabaseDriver::Postgres => "TEMPLATE_APP_POSTGRES",
-            DatabaseDriver::Sqlite | DatabaseDriver::FirebirdUnsupported => "TEMPLATE_APP_DB",
+            DatabaseDriver::Mysql => "SCALE_SIMULATOR_MYSQL",
+            DatabaseDriver::Postgres => "SCALE_SIMULATOR_POSTGRES",
+            DatabaseDriver::Sqlite | DatabaseDriver::FirebirdUnsupported => "SCALE_SIMULATOR_DB",
         };
         let default_port = match parsed_driver {
             DatabaseDriver::Mysql => Some(3306),
@@ -73,26 +73,26 @@ impl DatabaseConfig {
 
         Self {
             driver: parsed_driver,
-            sqlite_path: env::var("TEMPLATE_APP_SQLITE_PATH")
+            sqlite_path: env::var("SCALE_SIMULATOR_SQLITE_PATH")
                 .ok()
                 .or_else(|| Some("app.db".to_string())),
             host: env::var(format!("{prefix}_HOST"))
                 .ok()
-                .or_else(|| env::var("TEMPLATE_APP_DB_HOST").ok()),
+                .or_else(|| env::var("SCALE_SIMULATOR_DB_HOST").ok()),
             port: env::var(format!("{prefix}_PORT"))
                 .ok()
-                .or_else(|| env::var("TEMPLATE_APP_DB_PORT").ok())
+                .or_else(|| env::var("SCALE_SIMULATOR_DB_PORT").ok())
                 .and_then(|value| value.parse::<u16>().ok())
                 .or(default_port),
             database: env::var(format!("{prefix}_DATABASE"))
                 .ok()
-                .or_else(|| env::var("TEMPLATE_APP_DB_DATABASE").ok()),
+                .or_else(|| env::var("SCALE_SIMULATOR_DB_DATABASE").ok()),
             username: env::var(format!("{prefix}_USERNAME"))
                 .ok()
-                .or_else(|| env::var("TEMPLATE_APP_DB_USERNAME").ok()),
+                .or_else(|| env::var("SCALE_SIMULATOR_DB_USERNAME").ok()),
             password: env::var(format!("{prefix}_PASSWORD"))
                 .ok()
-                .or_else(|| env::var("TEMPLATE_APP_DB_PASSWORD").ok()),
+                .or_else(|| env::var("SCALE_SIMULATOR_DB_PASSWORD").ok()),
         }
     }
 

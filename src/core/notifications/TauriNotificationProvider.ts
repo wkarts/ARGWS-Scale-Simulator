@@ -1,3 +1,4 @@
+import { appAlert } from "../../services/dialog";
 import { invokeAppCommand } from "../invoker/CommandProviderFactory";
 import type { NotificationProvider } from "./NotificationProvider";
 
@@ -10,7 +11,7 @@ export class TauriNotificationProvider implements NotificationProvider {
     try {
       await invokeAppCommand<boolean>("notification_send", { title, message });
     } catch {
-      alert(`${title}\n${message}`);
+      await appAlert({ title, message });
     }
   }
 }

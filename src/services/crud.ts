@@ -259,6 +259,10 @@ export interface RuntimeSettings {
   internal_api_auto_start: boolean;
   internal_api_restart_on_config_change: boolean;
   internal_api_require_token: boolean;
+  app_service_name: string;
+  internal_api_token_header: string;
+  internal_api_cors_enabled: boolean;
+  internal_api_allow_public_network: boolean;
   internal_api_token: string;
   internal_api_docs_public_local: boolean;
   internal_api_open_scalar_after_start: boolean;
@@ -266,12 +270,36 @@ export interface RuntimeSettings {
   internal_api_log_mode: string;
   internal_api_docs_enabled: boolean;
   internal_api_docs_path: string;
+  local_web_enabled: boolean;
+  local_web_auto_start: boolean;
   local_web_host: string;
   local_web_port: number;
   auxiliary_host: string;
   auxiliary_port: number;
   bridge_core_host: string;
   bridge_core_port: number;
+  webhook_enabled: boolean;
+  webhook_auto_start: boolean;
+  webhook_host: string;
+  webhook_port: number;
+  webhook_base_path: string;
+  webhook_token_required: boolean;
+  webhook_token_header: string;
+  webhook_token: string;
+  webhook_allow_lan: boolean;
+  webhook_allow_external: boolean;
+  websocket_enabled: boolean;
+  websocket_auto_start: boolean;
+  websocket_host: string;
+  websocket_port: number;
+  websocket_path: string;
+  websocket_token_required: boolean;
+  websocket_token_query: string;
+  websocket_token_header: string;
+  websocket_token: string;
+  websocket_allow_lan: boolean;
+  websocket_allow_external: boolean;
+  websocket_heartbeat_seconds: number;
   tray_enabled: boolean;
   minimize_to_tray: boolean;
   close_to_tray: boolean;
@@ -296,4 +324,20 @@ export async function saveRuntimeSettings(settings: RuntimeSettings): Promise<Ru
 
 export async function setStartupWithWindows(enabled: boolean): Promise<GenericRecord> {
   return invokeCommand<GenericRecord>("startup_with_windows_set", { enabled });
+}
+
+export async function getWebProxyStatus(): Promise<GenericRecord> {
+  return invokeCommand<GenericRecord>("web_proxy_status");
+}
+
+export async function startWebProxy(): Promise<GenericRecord> {
+  return invokeCommand<GenericRecord>("web_proxy_start");
+}
+
+export async function stopWebProxy(): Promise<GenericRecord> {
+  return invokeCommand<GenericRecord>("web_proxy_stop");
+}
+
+export async function restartWebProxy(): Promise<GenericRecord> {
+  return invokeCommand<GenericRecord>("web_proxy_restart");
 }

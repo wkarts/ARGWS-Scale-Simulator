@@ -1,4 +1,4 @@
-# Relatório de implementação — template-app-tauri-desktop-web 1.1.1
+# Relatório de implementação — ARGWS-Scale-Simulator-web 1.1.1
 
 ## Status
 
@@ -89,7 +89,7 @@ fix(template): preserve storage compatibility in desktop-web runtime
 ## Descrição do PR
 
 ```text
-Este PR corrige a evolução `template-app-tauri-desktop-web` para preservar a compatibilidade com a camada de storage local anterior, restaurando `src/core/storage`, `WebLocalDatabase` e adicionando providers formais de LocalStorage e SessionStorage.
+Este PR corrige a evolução `ARGWS-Scale-Simulator-web` para preservar a compatibilidade com a camada de storage local anterior, restaurando `src/core/storage`, `WebLocalDatabase` e adicionando providers formais de LocalStorage e SessionStorage.
 
 A implementação mantém IndexedDB como provider principal para Web/PWA, mas adiciona fallback conservador via LocalStorage, evitando remoções abruptas e mantendo o template compatível com a versão anterior.
 

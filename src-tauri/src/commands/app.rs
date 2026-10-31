@@ -22,7 +22,7 @@ fn build_hash() -> String {
 }
 
 fn runtime_app_name() -> String {
-    std::env::var("TEMPLATE_APP_NAME")
+    std::env::var("SCALE_SIMULATOR_NAME")
         .or_else(|_| std::env::var("APP_NAME"))
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -30,11 +30,11 @@ fn runtime_app_name() -> String {
 }
 
 fn runtime_app_identifier() -> String {
-    std::env::var("TEMPLATE_APP_IDENTIFIER")
+    std::env::var("SCALE_SIMULATOR_IDENTIFIER")
         .or_else(|_| std::env::var("APP_IDENTIFIER"))
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "com.template.app".to_string())
+        .unwrap_or_else(|| "br.com.wkarts.scale-simulator-tauri".to_string())
 }
 
 fn export_dir_for(data_dir: &std::path::Path) -> PathBuf {

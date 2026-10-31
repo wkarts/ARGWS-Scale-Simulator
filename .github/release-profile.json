@@ -1,0 +1,9 @@
+{
+  "product": "scale-simulator",
+  "mode": "desktop-web",
+  "stable_branch": "main",
+  "prerelease_branch": "develop",
+  "prerelease_channel": "beta",
+  "targets": ["x86_64-pc-windows-msvc", "i686-pc-windows-msvc", "x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin", "web", "sources"],
+  "mobile": "separate-workflows"
+}

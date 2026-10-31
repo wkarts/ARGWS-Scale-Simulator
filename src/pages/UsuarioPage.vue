@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import AppModal from "../components/AppModal.vue";
+import BasePage from "../components/base/BasePage.vue";
 import AppSwitch from "../components/AppSwitch.vue";
 import {
   comboList,
@@ -17,6 +18,7 @@ import { booleanLabel, formatPhone } from "../services/format";
 import { useSessionStore } from "../stores/session";
 import { logAppError, logAppInfo } from "../services/logger";
 import { showSplashSuccess } from "../services/splash";
+import { appConfirm } from "../services/dialog";
 
 const session = useSessionStore();
 const rows = ref<Record<string, unknown>[]>([]);
@@ -36,6 +38,15 @@ const profileOptions = ref<ComboOption[]>([]);
 const loginMinLength = ref(2);
 const loginMinAllowed = ref(1);
 const loginMaxAllowed = ref(64);
+const passwordMinLength = ref(8);
+const passwordMaxLength = ref(128);
+const passwordMinAllowed = ref(6);
+const passwordMaxAllowed = ref(128);
+const passwordRequireLetter = ref(true);
+const passwordRequireNumber = ref(true);
+const passwordRequireUppercase = ref(false);
+const passwordRequireLowercase = ref(false);
+const passwordRequireSymbol = ref(false);
 
 function defaultForm() {
   return {
@@ -50,6 +61,9 @@ function defaultForm() {
     master_user: false,
     administrador: false,
     senha_provisoria: false,
+    api_access_enabled: false,
+    mobile_access_enabled: true,
+    api_session_timeout_minutes: 720,
     ativo: true,
     photo_url: "",
     empresa_ids: [] as string[],
@@ -140,6 +154,15 @@ async function loadPolicy() {
     loginMinLength.value = Number(payload.login_min_length || 2);
     loginMinAllowed.value = Number(payload.login_min_allowed || 1);
     loginMaxAllowed.value = Number(payload.login_max_allowed || 64);
+    passwordMinLength.value = Number(payload.password_min_length || 8);
+    passwordMaxLength.value = Number(payload.password_max_length || 128);
+    passwordMinAllowed.value = Number(payload.password_min_allowed || 6);
+    passwordMaxAllowed.value = Number(payload.password_max_allowed || 128);
+    passwordRequireLetter.value = Boolean(payload.password_require_letter);
+    passwordRequireNumber.value = Boolean(payload.password_require_number);
+    passwordRequireUppercase.value = Boolean(payload.password_require_uppercase);
+    passwordRequireLowercase.value = Boolean(payload.password_require_lowercase);
+    passwordRequireSymbol.value = Boolean(payload.password_require_symbol);
   } catch (err) {
     policyError.value = err instanceof Error ? err.message : "Falha ao carregar política de login.";
     logAppError("usuarios", "Falha ao carregar política de login.", { error: policyError.value });
@@ -154,10 +177,26 @@ async function persistPolicy() {
   policySaving.value = true;
   policyError.value = "";
   try {
-    const payload = await saveUserPolicy(session.sessionToken!, { login_min_length: Number(loginMinLength.value) });
+    const payload = await saveUserPolicy(session.sessionToken!, {
+      login_min_length: Number(loginMinLength.value),
+      password_min_length: Number(passwordMinLength.value),
+      password_max_length: Number(passwordMaxLength.value),
+      password_require_letter: passwordRequireLetter.value,
+      password_require_number: passwordRequireNumber.value,
+      password_require_uppercase: passwordRequireUppercase.value,
+      password_require_lowercase: passwordRequireLowercase.value,
+      password_require_symbol: passwordRequireSymbol.value,
+    });
     loginMinLength.value = Number(payload.login_min_length || loginMinLength.value);
     loginMinAllowed.value = Number(payload.login_min_allowed || loginMinAllowed.value);
     loginMaxAllowed.value = Number(payload.login_max_allowed || loginMaxAllowed.value);
+    passwordMinLength.value = Number(payload.password_min_length || passwordMinLength.value);
+    passwordMaxLength.value = Number(payload.password_max_length || passwordMaxLength.value);
+    passwordRequireLetter.value = Boolean(payload.password_require_letter);
+    passwordRequireNumber.value = Boolean(payload.password_require_number);
+    passwordRequireUppercase.value = Boolean(payload.password_require_uppercase);
+    passwordRequireLowercase.value = Boolean(payload.password_require_lowercase);
+    passwordRequireSymbol.value = Boolean(payload.password_require_symbol);
     logAppInfo("usuarios", "Política de login atualizada com sucesso.", { login_min_length: loginMinLength.value });
   } catch (err) {
     policyError.value = err instanceof Error ? err.message : "Falha ao salvar política de login.";
@@ -179,6 +218,9 @@ async function editRow(id: number) {
       master_user: Number(record.master_user) === 1 || record.master_user === true,
       administrador: Number(record.administrador) === 1 || record.administrador === true,
       senha_provisoria: Number(record.senha_provisoria) === 1 || record.senha_provisoria === true,
+      api_access_enabled: Number(record.api_access_enabled) === 1 || record.api_access_enabled === true,
+      mobile_access_enabled: Number(record.mobile_access_enabled) === 1 || record.mobile_access_enabled === true,
+      api_session_timeout_minutes: Number(record.api_session_timeout_minutes || 720),
       ativo: Number(record.ativo) === 1 || record.ativo === true,
       empresa_ids: toStringArray(record.empresa_ids),
       profile_ids: toStringArray(record.profile_ids),
@@ -217,7 +259,7 @@ async function persist() {
 
 async function removeRow(id: number) {
   if (!canManage.value) return;
-  if (!confirm("Deseja excluir este usuário?")) return;
+  if (!(await appConfirm({ title: "Excluir usuário", message: "Deseja excluir este usuário?", danger: true, confirmText: "Excluir" }))) return;
   try {
     await ensureSession();
     await deleteUser(session.sessionToken!, id);
@@ -245,16 +287,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="grid page-gap">
-    <div class="toolbar">
-      <div>
-        <h2>Cadastro de usuários</h2>
-        <div class="muted-text">Listagem fixa com manutenção do acesso em modal.</div>
-      </div>
-      <div class="actions">
-        <button class="secondary" :disabled="!canManage" @click="openNewModal">Novo cadastro</button>
-      </div>
-    </div>
+  <BasePage title="Cadastro de usuários" subtitle="Listagem fixa com manutenção do acesso em modal." icon="users">
+    <template #actions>
+      <button class="secondary" :disabled="!canManage" @click="openNewModal">Novo cadastro</button>
+    </template>
 
     <div v-if="!session.can('usuarios:view')" class="alert error">Você não possui permissão para visualizar usuários.</div>
     <div v-else class="grid page-gap">
@@ -267,17 +303,24 @@ onMounted(async () => {
             <h3>Políticas de login</h3>
             <div class="muted-text">Parâmetro global aplicado na criação e atualização de usuários.</div>
           </div>
-          <div class="actions align-end">
+          <div class="actions align-end policy-controls">
             <div class="field min-field">
-              <label>Mínimo de caracteres no login</label>
-              <input
-                v-model.number="loginMinLength"
-                type="number"
-                :min="loginMinAllowed"
-                :max="loginMaxAllowed"
-                :disabled="policyLoading || policySaving || !canManage"
-              />
+              <label>Mínimo no login</label>
+              <input v-model.number="loginMinLength" type="number" :min="loginMinAllowed" :max="loginMaxAllowed" :disabled="policyLoading || policySaving || !canManage" />
             </div>
+            <div class="field min-field">
+              <label>Mínimo na senha</label>
+              <input v-model.number="passwordMinLength" type="number" :min="passwordMinAllowed" :max="passwordMaxLength" :disabled="policyLoading || policySaving || !canManage" />
+            </div>
+            <div class="field min-field">
+              <label>Máximo na senha</label>
+              <input v-model.number="passwordMaxLength" type="number" :min="passwordMinLength" :max="passwordMaxAllowed" :disabled="policyLoading || policySaving || !canManage" />
+            </div>
+            <AppSwitch v-model="passwordRequireLetter" label="Exigir letra" :disabled="policyLoading || policySaving || !canManage" />
+            <AppSwitch v-model="passwordRequireNumber" label="Exigir número" :disabled="policyLoading || policySaving || !canManage" />
+            <AppSwitch v-model="passwordRequireUppercase" label="Exigir maiúscula" :disabled="policyLoading || policySaving || !canManage" />
+            <AppSwitch v-model="passwordRequireLowercase" label="Exigir minúscula" :disabled="policyLoading || policySaving || !canManage" />
+            <AppSwitch v-model="passwordRequireSymbol" label="Exigir símbolo" :disabled="policyLoading || policySaving || !canManage" />
             <button class="secondary" :disabled="policyLoading || policySaving || !canManage" @click="persistPolicy">
               {{ policySaving ? "Salvando..." : "Salvar política" }}
             </button>
@@ -326,11 +369,13 @@ onMounted(async () => {
               <tr v-for="row in rows" :key="Number(row.id)">
                 <td>{{ row.id }}</td>
                 <td>
-                  <div class="avatar-preview-row"><img v-if="row.photo_url" :src="String(row.photo_url)" class="user-avatar-img" alt="Foto" /><div v-else class="user-avatar">{{ String(row.nome || row.login || 'U').slice(0, 1).toUpperCase() }}</div><div><strong>{{ row.nome }}</strong><div class="muted-row">{{ row.login }}</div></div></div>
+                  <div class="avatar-preview-row avatar-editor-card"><img v-if="row.photo_url" :src="String(row.photo_url)" class="user-avatar-img" alt="Foto" /><div v-else class="user-avatar">{{ String(row.nome || row.login || 'U').slice(0, 1).toUpperCase() }}</div><div><strong>{{ row.nome }}</strong><div class="muted-row">{{ row.login }}</div></div></div>
                   <div class="pill-box top-gap-6">
                     <span v-if="Number(row.master_user) === 1 || row.master_user === true" class="status-pill pill-master">MASTER</span>
                     <span v-if="Number(row.administrador) === 1 || row.administrador === true" class="status-pill pill-secondary">ADMIN</span>
                     <span v-if="Number(row.senha_provisoria) === 1 || row.senha_provisoria === true" class="status-pill pill-warning">SENHA PROVISÓRIA</span>
+                    <span v-if="Number(row.api_access_enabled) === 1 || row.api_access_enabled === true" class="status-pill pill-secondary">API</span>
+                    <span v-if="Number(row.mobile_access_enabled) === 1 || row.mobile_access_enabled === true" class="status-pill pill-secondary">MOBILE</span>
                   </div>
                 </td>
                 <td>
@@ -364,7 +409,8 @@ onMounted(async () => {
       width="xl"
       @close="closeModal"
     >
-      <div class="grid page-gap">
+      <div class="grid page-gap user-modal-shell">
+        <section class="modal-section-card">
         <div class="section-title">Dados do acesso</div>
         <div class="avatar-preview-row">
           <img v-if="form.photo_url" :src="form.photo_url" class="avatar-preview" alt="Foto do usuário" />
@@ -398,28 +444,44 @@ onMounted(async () => {
           </div>
           <div class="field">
             <label>{{ form.id ? 'Nova senha (opcional)' : 'Senha *' }}</label>
-            <input v-model="form.senha" type="password" :disabled="!canManage" placeholder="mínimo 6 caracteres" />
+            <input v-model="form.senha" type="password" :disabled="!canManage" :minlength="passwordMinLength" :maxlength="passwordMaxLength" :placeholder="`mínimo ${passwordMinLength} caracteres`" />
           </div>
         </div>
+        </section>
 
-        <div class="section-title">Perfis e empresas</div>
-        <div class="grid columns-2 mobile-columns-1">
-          <div class="field span-2">
-            <label>Perfis de acesso</label>
-            <select v-model="form.profile_ids" multiple size="5" :disabled="!canManage || form.master_user">
-              <option v-for="item in profileOptions" :key="item.id" :value="String(item.id)">{{ item.label }}</option>
-            </select>
-            <div class="muted-row">Segure Ctrl/Cmd para selecionar múltiplos perfis.</div>
+        <section class="modal-section-card">
+          <div class="section-title">Perfis e empresas</div>
+          <div class="selection-summary-row">
+            <span class="selection-summary-pill">{{ form.profile_ids.length }} perfil(is) selecionado(s)</span>
+            <span class="selection-summary-pill">{{ form.empresa_ids.length }} empresa(s) vinculada(s)</span>
+            <span v-if="form.master_user" class="selection-summary-pill">Master: vínculo específico opcional</span>
           </div>
-          <div class="field span-2">
-            <label>Empresas vinculadas</label>
-            <select v-model="form.empresa_ids" multiple size="5" :disabled="!canManage || form.master_user">
-              <option v-for="item in companyOptions" :key="item.id" :value="String(item.id)">{{ item.label }}</option>
-            </select>
-            <div class="muted-row">Usuário master pode operar sem vínculo específico de empresa.</div>
+          <div class="grid columns-2 mobile-columns-1">
+            <div class="field">
+              <label>Perfis de acesso</label>
+              <div class="selection-card-grid">
+                <label v-for="item in profileOptions" :key="item.id" class="selection-card">
+                  <input v-model="form.profile_ids" type="checkbox" :value="String(item.id)" :disabled="!canManage || form.master_user" />
+                  <span class="selection-switch-ui"></span>
+                  <span class="selection-card-copy"><strong>{{ item.label }}</strong><small>Perfil #{{ item.id }}</small></span>
+                </label>
+              </div>
+            </div>
+            <div class="field">
+              <label>Empresas vinculadas</label>
+              <div class="selection-card-grid">
+                <label v-for="item in companyOptions" :key="item.id" class="selection-card">
+                  <input v-model="form.empresa_ids" type="checkbox" :value="String(item.id)" :disabled="!canManage || form.master_user" />
+                  <span class="selection-switch-ui"></span>
+                  <span class="selection-card-copy"><strong>{{ item.label }}</strong><small>Acesso permitido para esta empresa</small></span>
+                </label>
+              </div>
+              <div class="muted-row">Ative as empresas onde este usuário poderá operar. Usuário master pode operar sem vínculo específico.</div>
+            </div>
           </div>
-        </div>
+        </section>
 
+        <section class="modal-section-card">
         <div class="section-title">Status e observações</div>
         <div class="grid columns-2 mobile-columns-1">
           <div class="field span-2">
@@ -429,10 +491,17 @@ onMounted(async () => {
           <AppSwitch v-model="form.master_user" label="Usuário master" :disabled="!canManage" />
           <AppSwitch v-model="form.administrador" label="Administrador" :disabled="!canManage" />
           <AppSwitch v-model="form.senha_provisoria" label="Senha provisória / exigir troca" :disabled="!canManage" />
+          <AppSwitch v-model="form.api_access_enabled" label="Permitir acesso pela API" :disabled="!canManage" />
+          <AppSwitch v-model="form.mobile_access_enabled" label="Permitir acesso mobile" :disabled="!canManage" />
+          <div class="field">
+            <label>Tempo da sessão API/mobile (minutos)</label>
+            <input v-model.number="form.api_session_timeout_minutes" type="number" min="15" max="43200" :disabled="!canManage" />
+          </div>
           <AppSwitch v-model="form.ativo" label="Usuário ativo" :disabled="!canManage" />
         </div>
+        </section>
 
-        <div class="actions">
+        <div class="actions modal-actions-footer">
           <button class="primary" :disabled="saving || !canManage" @click="persist">
             {{ saving ? "Salvando..." : form.id ? "Atualizar usuário" : "Salvar usuário" }}
           </button>
@@ -440,5 +509,5 @@ onMounted(async () => {
         </div>
       </div>
     </AppModal>
-  </div>
+  </BasePage>
 </template>

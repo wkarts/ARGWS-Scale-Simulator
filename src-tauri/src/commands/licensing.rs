@@ -165,8 +165,8 @@ fn build_check_input(
         company_name: get_string(settings, "company_name").or_else(|| Some(empresa_nome.clone())),
         company_email: get_string(settings, "company_email").or(empresa_email.clone()),
         company_legal_name: Some(empresa_nome),
-        app_id: "template-app".to_string(),
-        app_name: "Template App".to_string(),
+        app_id: "scale-simulator".to_string(),
+        app_name: "Scale Simulator".to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         app_slug: Some(
             get_string(settings, "app_instance").unwrap_or_else(|| "app-template".to_string()),

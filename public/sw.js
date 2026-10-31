@@ -1,4 +1,4 @@
-const CACHE_NAME = 'scale-simulator-web-v0.1.11';
+const CACHE_NAME = 'scale-simulator-desktop-web-v102';
 const CORE_ASSETS = ['/', '/index.html', '/offline.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

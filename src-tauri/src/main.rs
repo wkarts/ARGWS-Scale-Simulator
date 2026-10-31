@@ -9,5 +9,14 @@ fn main() {
         }
         return;
     }
+    #[cfg(feature = "desktop")]
     scale_simulator_tauri_lib::run();
+
+    #[cfg(not(feature = "desktop"))]
+    {
+        eprintln!(
+            "O modo desktop exige a feature Cargo 'desktop'. Use --headless, --cli ou --worker."
+        );
+        std::process::exit(2);
+    }
 }

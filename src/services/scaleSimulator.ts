@@ -1,4 +1,6 @@
-import { invokeCommand } from "./tauri";
+import { useSessionStore } from '../stores/session';
+function invokeCommand<T>(name:string,args:Record<string,unknown>={}) { return rawInvoke<T>(name,{...args,session_token:useSessionStore().sessionToken}); }
+import { invokeCommand as rawInvoke } from "./tauri";
 
 export type ScaleSimulatorDriver = "wt1000n" | "wt27r" | "wt3000ir" | "toledo8540" | "toledo_prix3" | "a12e" | "lider_ld2052" | "filizola" | "generic_ascii";
 export type ScaleSimulatorMode = "tcp_server" | "tcp_server_command" | "serial_continuous" | "serial_command";

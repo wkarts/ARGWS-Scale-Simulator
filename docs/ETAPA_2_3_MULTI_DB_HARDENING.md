@@ -17,7 +17,7 @@ MySQL/MariaDB e PostgreSQL já têm conexão, health check e migrations por feat
 
 ## Segurança da API interna
 
-Quando `requireToken=true`, os endpoints `/docs` e `/openapi.json` também são protegidos por token, exceto se `TEMPLATE_APP_API_DOCS_PUBLIC=true` for configurado explicitamente.
+Quando `requireToken=true`, os endpoints `/docs` e `/openapi.json` também são protegidos por token, exceto se `SCALE_SIMULATOR_API_DOCS_PUBLIC=true` for configurado explicitamente.
 
 Headers padrão:
 
@@ -28,12 +28,12 @@ X-App-Token: <token>
 Variáveis relevantes:
 
 ```text
-TEMPLATE_APP_API_REQUIRE_TOKEN=true
-# TEMPLATE_APP_API_TOKEN deve ser fornecido via secret/variável de ambiente segura.
-TEMPLATE_APP_API_TOKEN_HEADER=X-App-Token
-TEMPLATE_APP_API_EXPOSE_DOCS=true
-TEMPLATE_APP_API_DOCS_PUBLIC=false
-TEMPLATE_APP_API_ALLOW_PUBLIC_NETWORK=false
+SCALE_SIMULATOR_API_REQUIRE_TOKEN=true
+# SCALE_SIMULATOR_API_TOKEN deve ser fornecido via secret/variável de ambiente segura.
+SCALE_SIMULATOR_API_TOKEN_HEADER=X-App-Token
+SCALE_SIMULATOR_API_EXPOSE_DOCS=true
+SCALE_SIMULATOR_API_DOCS_PUBLIC=false
+SCALE_SIMULATOR_API_ALLOW_PUBLIC_NETWORK=false
 ```
 
 ## Validação esperada em ambiente com toolchain

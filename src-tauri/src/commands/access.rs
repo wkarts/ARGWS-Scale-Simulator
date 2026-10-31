@@ -6,7 +6,7 @@ use tauri::State;
 use crate::{
     app_state::SharedState,
     db::{enqueue_sync, open_connection, row_to_json_map, write_audit},
-    security::hash_password,
+    security::{hash_password, load_password_policy, save_password_policy, PasswordPolicy},
 };
 
 use super::auth::{all_permission_keys, require_session_by_token};
@@ -165,10 +165,20 @@ pub fn user_policy_get(
     let conn = open_connection(&db_path)?;
     let _ = ensure_master(&conn, &session_token)?;
     let login_min_length = load_login_min_length(&conn)?;
+    let password_policy = load_password_policy(&conn)?;
     Ok(json!({
         "login_min_length": login_min_length,
         "login_min_allowed": USER_LOGIN_MIN_LENGTH_MIN,
-        "login_max_allowed": USER_LOGIN_MIN_LENGTH_MAX
+        "login_max_allowed": USER_LOGIN_MIN_LENGTH_MAX,
+        "password_min_length": password_policy.min_length,
+        "password_max_length": password_policy.max_length,
+        "password_min_allowed": crate::security::PASSWORD_MIN_ALLOWED,
+        "password_max_allowed": crate::security::PASSWORD_MAX_ALLOWED,
+        "password_require_letter": password_policy.require_letter,
+        "password_require_number": password_policy.require_number,
+        "password_require_uppercase": password_policy.require_uppercase,
+        "password_require_lowercase": password_policy.require_lowercase,
+        "password_require_symbol": password_policy.require_symbol
     })
     .as_object()
     .cloned()
@@ -204,13 +214,59 @@ pub fn user_policy_save(
     )
     .map_err(|err| format!("Falha ao salvar política de login: {err}"))?;
 
-    let value = json!({ "login_min_length": login_min_length });
+    let current_password_policy = load_password_policy(&conn)?;
+    let password_policy = PasswordPolicy {
+        min_length: get_i64(&payload, "password_min_length")
+            .unwrap_or(current_password_policy.min_length as i64) as usize,
+        max_length: get_i64(&payload, "password_max_length")
+            .unwrap_or(current_password_policy.max_length as i64) as usize,
+        require_letter: get_bool(
+            &payload,
+            "password_require_letter",
+            current_password_policy.require_letter,
+        ) == 1,
+        require_number: get_bool(
+            &payload,
+            "password_require_number",
+            current_password_policy.require_number,
+        ) == 1,
+        require_uppercase: get_bool(
+            &payload,
+            "password_require_uppercase",
+            current_password_policy.require_uppercase,
+        ) == 1,
+        require_lowercase: get_bool(
+            &payload,
+            "password_require_lowercase",
+            current_password_policy.require_lowercase,
+        ) == 1,
+        require_symbol: get_bool(
+            &payload,
+            "password_require_symbol",
+            current_password_policy.require_symbol,
+        ) == 1,
+    };
+    let password_policy = save_password_policy(&conn, password_policy)?;
+
+    let value = json!({
+        "login_min_length": login_min_length,
+        "password_policy": password_policy.to_public_value()
+    });
     write_audit(&conn, "user_policy", "update", Some(actor_id), &value)?;
 
     Ok(json!({
         "login_min_length": login_min_length,
         "login_min_allowed": USER_LOGIN_MIN_LENGTH_MIN,
-        "login_max_allowed": USER_LOGIN_MIN_LENGTH_MAX
+        "login_max_allowed": USER_LOGIN_MIN_LENGTH_MAX,
+        "password_min_length": password_policy.min_length,
+        "password_max_length": password_policy.max_length,
+        "password_min_allowed": crate::security::PASSWORD_MIN_ALLOWED,
+        "password_max_allowed": crate::security::PASSWORD_MAX_ALLOWED,
+        "password_require_letter": password_policy.require_letter,
+        "password_require_number": password_policy.require_number,
+        "password_require_uppercase": password_policy.require_uppercase,
+        "password_require_lowercase": password_policy.require_lowercase,
+        "password_require_symbol": password_policy.require_symbol
     })
     .as_object()
     .cloned()
@@ -244,6 +300,8 @@ pub fn permission_catalog(
                 "config:view" => "Visualizar configurações".to_string(),
                 "config:manage" => "Gerenciar configurações".to_string(),
                 "relatorios:export" => "Exportar relatórios".to_string(),
+                "api:access" => "Acessar pela API".to_string(),
+                "mobile:access" => "Acessar pelo aplicativo mobile".to_string(),
                 other => {
                     let mut parts = other.split(':');
                     let module = parts.next().unwrap_or("geral").replace('_', " ");
@@ -528,6 +586,9 @@ pub fn user_list(
                 u.master_user,
                 u.administrador,
                 u.senha_provisoria,
+                u.api_access_enabled,
+                u.mobile_access_enabled,
+                u.api_session_timeout_minutes,
                 u.ativo,
                 u.ultimo_login_em,
                 u.created_at,
@@ -539,7 +600,7 @@ pub fn user_list(
          LEFT JOIN perfis_acesso p ON p.id = up.perfil_id
          LEFT JOIN usuarios_empresas ue ON ue.usuario_id = u.id
          LEFT JOIN empresas e ON e.id = ue.empresa_id
-         WHERE 1=1",
+         WHERE COALESCE(u.local_guest, 0) = 0",
     );
     let mut values: Vec<rusqlite::types::Value> = Vec::new();
 
@@ -586,7 +647,10 @@ pub fn user_get(
 
     let mut record = conn
         .query_row(
-            "SELECT id, nome, login, email, telefone, cargo, observacoes, photo_url, master_user, administrador, senha_provisoria, ativo, ultimo_login_em, created_at, updated_at
+            "SELECT id, nome, login, email, telefone, cargo, observacoes, photo_url,
+                    master_user, administrador, senha_provisoria,
+                    api_access_enabled, mobile_access_enabled, api_session_timeout_minutes,
+                    ativo, ultimo_login_em, created_at, updated_at
              FROM usuarios
              WHERE id = ?1
              LIMIT 1",
@@ -651,11 +715,17 @@ pub fn user_save(
     let master_user = get_bool(&payload, "master_user", false);
     let administrador = get_bool(&payload, "administrador", false);
     let senha_provisoria = get_bool(&payload, "senha_provisoria", false);
+    let api_access_enabled = get_bool(&payload, "api_access_enabled", false);
+    let mobile_access_enabled = get_bool(&payload, "mobile_access_enabled", true);
+    let api_session_timeout_minutes = get_i64(&payload, "api_session_timeout_minutes")
+        .unwrap_or(720)
+        .clamp(15, 43_200);
     let ativo = get_bool(&payload, "ativo", true);
     let password = get_string(&payload, "senha");
     let profile_ids = get_i64_array(&payload, "profile_ids");
     let empresa_ids = get_i64_array(&payload, "empresa_ids");
     let login_min_length = load_login_min_length(&conn)?;
+    let password_policy = load_password_policy(&conn)?;
 
     if login.len() < login_min_length as usize {
         return Err(format!(
@@ -671,9 +741,10 @@ pub fn user_save(
     }
 
     if let Some(existing_id) = id {
-        if existing_id == actor_id && ativo == 0 {
+        if existing_id == actor_id && (ativo == 0 || master_user == 0) {
             return Err(
-                "O usuário master logado não pode ser inativado nesta operação.".to_string(),
+                "O usuário master logado não pode ser inativado nem perder o perfil master nesta operação."
+                    .to_string(),
             );
         }
     }
@@ -730,16 +801,16 @@ pub fn user_save(
 
     let record_id = if let Some(existing_id) = id {
         if let Some(raw_password) = password.as_deref() {
-            if raw_password.trim().len() < 6 {
-                return Err("A senha deve conter ao menos 6 caracteres.".to_string());
-            }
+            password_policy.validate(raw_password.trim())?;
             let password_hash = hash_password(raw_password.trim())?;
             conn.execute(
                 "UPDATE usuarios
                  SET nome = ?1, login = ?2, email = ?3, telefone = ?4, cargo = ?5, observacoes = ?6, photo_url = ?7,
-                     master_user = ?8, administrador = ?9, senha_provisoria = ?10, ativo = ?11,
-                     senha_hash = ?12, updated_at = ?13
-                 WHERE id = ?14",
+                     master_user = ?8, administrador = ?9, senha_provisoria = ?10,
+                     api_access_enabled = ?11, mobile_access_enabled = ?12,
+                     api_session_timeout_minutes = ?13, ativo = ?14,
+                     senha_hash = ?15, updated_at = ?16
+                 WHERE id = ?17",
                 params![
                     nome,
                     login,
@@ -751,6 +822,9 @@ pub fn user_save(
                     master_user,
                     administrador,
                     senha_provisoria,
+                    api_access_enabled,
+                    mobile_access_enabled,
+                    api_session_timeout_minutes,
                     ativo,
                     password_hash,
                     now,
@@ -762,9 +836,11 @@ pub fn user_save(
             conn.execute(
                 "UPDATE usuarios
                  SET nome = ?1, login = ?2, email = ?3, telefone = ?4, cargo = ?5, observacoes = ?6, photo_url = ?7,
-                     master_user = ?8, administrador = ?9, senha_provisoria = ?10, ativo = ?11,
-                     updated_at = ?12
-                 WHERE id = ?13",
+                     master_user = ?8, administrador = ?9, senha_provisoria = ?10,
+                     api_access_enabled = ?11, mobile_access_enabled = ?12,
+                     api_session_timeout_minutes = ?13, ativo = ?14,
+                     updated_at = ?15
+                 WHERE id = ?16",
                 params![
                     nome,
                     login,
@@ -776,6 +852,9 @@ pub fn user_save(
                     master_user,
                     administrador,
                     senha_provisoria,
+                    api_access_enabled,
+                    mobile_access_enabled,
+                    api_session_timeout_minutes,
                     ativo,
                     now,
                     existing_id,
@@ -787,15 +866,15 @@ pub fn user_save(
     } else {
         let raw_password =
             password.ok_or_else(|| "Informe a senha do novo usuário.".to_string())?;
-        if raw_password.trim().len() < 6 {
-            return Err("A senha deve conter ao menos 6 caracteres.".to_string());
-        }
+        password_policy.validate(raw_password.trim())?;
         let password_hash = hash_password(raw_password.trim())?;
         conn.execute(
             "INSERT INTO usuarios (
                 nome, login, email, telefone, cargo, observacoes, photo_url, senha_hash,
-                master_user, administrador, senha_provisoria, ativo, created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)",
+                master_user, administrador, senha_provisoria,
+                api_access_enabled, mobile_access_enabled, api_session_timeout_minutes,
+                local_guest, ativo, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 0, ?15, ?16, ?16)",
             params![
                 nome,
                 login,
@@ -808,6 +887,9 @@ pub fn user_save(
                 master_user,
                 administrador,
                 senha_provisoria,
+                api_access_enabled,
+                mobile_access_enabled,
+                api_session_timeout_minutes,
                 ativo,
                 now,
             ],
@@ -850,6 +932,9 @@ pub fn user_save(
         "photo_url": photo_url,
         "master_user": master_user,
         "administrador": administrador,
+        "api_access_enabled": api_access_enabled,
+        "mobile_access_enabled": mobile_access_enabled,
+        "api_session_timeout_minutes": api_session_timeout_minutes,
         "ativo": ativo,
     });
     enqueue_sync(

@@ -3,9 +3,13 @@ use argon2::{
     Argon2,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
+use chrono::Utc;
 use data_encoding::BASE32_NOPAD;
 use hmac::{Hmac, Mac};
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng, RngCore};
+use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 
@@ -142,4 +146,137 @@ pub fn verify_totp_code(secret_base32: &str, code: &str) -> Result<bool, String>
         }
     }
     Ok(false)
+}
+
+pub const PASSWORD_MIN_ALLOWED: usize = 6;
+pub const PASSWORD_MAX_ALLOWED: usize = 128;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasswordPolicy {
+    pub min_length: usize,
+    pub max_length: usize,
+    pub require_letter: bool,
+    pub require_number: bool,
+    pub require_uppercase: bool,
+    pub require_lowercase: bool,
+    pub require_symbol: bool,
+}
+
+impl Default for PasswordPolicy {
+    fn default() -> Self {
+        Self {
+            min_length: 8,
+            max_length: PASSWORD_MAX_ALLOWED,
+            require_letter: true,
+            require_number: true,
+            require_uppercase: false,
+            require_lowercase: false,
+            require_symbol: false,
+        }
+    }
+}
+
+impl PasswordPolicy {
+    pub fn normalized(mut self) -> Result<Self, String> {
+        if !(PASSWORD_MIN_ALLOWED..=PASSWORD_MAX_ALLOWED).contains(&self.min_length) {
+            return Err(format!(
+                "O tamanho mínimo da senha deve ficar entre {} e {} caracteres.",
+                PASSWORD_MIN_ALLOWED, PASSWORD_MAX_ALLOWED
+            ));
+        }
+        if self.max_length < self.min_length || self.max_length > PASSWORD_MAX_ALLOWED {
+            return Err(format!(
+                "O tamanho máximo da senha deve ficar entre {} e {} caracteres.",
+                self.min_length, PASSWORD_MAX_ALLOWED
+            ));
+        }
+        if self.require_uppercase || self.require_lowercase {
+            self.require_letter = true;
+        }
+        Ok(self)
+    }
+
+    pub fn validate(&self, password: &str) -> Result<(), String> {
+        let chars = password.chars().count();
+        if chars < self.min_length {
+            return Err(format!(
+                "A senha deve conter ao menos {} caracteres.",
+                self.min_length
+            ));
+        }
+        if chars > self.max_length {
+            return Err(format!(
+                "A senha deve conter no máximo {} caracteres.",
+                self.max_length
+            ));
+        }
+        if self.require_letter && !password.chars().any(|value| value.is_alphabetic()) {
+            return Err("A senha deve conter ao menos uma letra.".to_string());
+        }
+        if self.require_number && !password.chars().any(|value| value.is_ascii_digit()) {
+            return Err("A senha deve conter ao menos um número.".to_string());
+        }
+        if self.require_uppercase && !password.chars().any(|value| value.is_uppercase()) {
+            return Err("A senha deve conter ao menos uma letra maiúscula.".to_string());
+        }
+        if self.require_lowercase && !password.chars().any(|value| value.is_lowercase()) {
+            return Err("A senha deve conter ao menos uma letra minúscula.".to_string());
+        }
+        if self.require_symbol && !password.chars().any(|value| !value.is_alphanumeric()) {
+            return Err("A senha deve conter ao menos um símbolo.".to_string());
+        }
+        Ok(())
+    }
+
+    pub fn to_public_value(&self) -> Value {
+        json!({
+            "min_length": self.min_length,
+            "max_length": self.max_length,
+            "min_allowed": PASSWORD_MIN_ALLOWED,
+            "max_allowed": PASSWORD_MAX_ALLOWED,
+            "require_letter": self.require_letter,
+            "require_number": self.require_number,
+            "require_uppercase": self.require_uppercase,
+            "require_lowercase": self.require_lowercase,
+            "require_symbol": self.require_symbol,
+        })
+    }
+}
+
+const PASSWORD_POLICY_KEY: &str = "security.password_policy";
+
+pub fn load_password_policy(conn: &Connection) -> Result<PasswordPolicy, String> {
+    let raw = conn
+        .query_row(
+            "SELECT valor FROM app_settings WHERE chave = ?1 LIMIT 1",
+            [PASSWORD_POLICY_KEY],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|err| format!("Falha ao consultar política de senha: {err}"))?;
+
+    match raw {
+        Some(value) => serde_json::from_str::<PasswordPolicy>(&value)
+            .map_err(|err| format!("Política de senha armazenada é inválida: {err}"))?
+            .normalized(),
+        None => Ok(PasswordPolicy::default()),
+    }
+}
+
+pub fn save_password_policy(
+    conn: &Connection,
+    policy: PasswordPolicy,
+) -> Result<PasswordPolicy, String> {
+    let normalized = policy.normalized()?;
+    let encoded = serde_json::to_string(&normalized)
+        .map_err(|err| format!("Falha ao serializar política de senha: {err}"))?;
+    let timestamp = Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO app_settings (chave, valor, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?3)
+         ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, updated_at = excluded.updated_at",
+        params![PASSWORD_POLICY_KEY, encoded, timestamp],
+    )
+    .map_err(|err| format!("Falha ao salvar política de senha: {err}"))?;
+    Ok(normalized)
 }

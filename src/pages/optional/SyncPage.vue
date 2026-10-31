@@ -11,7 +11,7 @@ import BaseSectionCard from "../../components/base/BaseSectionCard.vue";
       <div class="kpi"><strong>Última sync</strong><span>—</span></div>
       <div class="kpi"><strong>Status</strong><span>Inativo</span></div>
     </div>
-    <BaseSectionCard title="Fila de sincronização" subtitle="Este recurso não possui fila operacional nesta versão do simulador.">
+    <BaseSectionCard title="Fila de sincronização" subtitle="Nenhuma fila implementada neste template base.">
       <div class="empty-state"><strong>Nenhuma pendência.</strong><p>Projetos específicos podem plugar filas e workers sem alterar o core visual.</p></div>
     </BaseSectionCard>
   </BasePage>
