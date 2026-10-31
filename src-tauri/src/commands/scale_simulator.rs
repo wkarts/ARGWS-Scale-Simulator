@@ -334,7 +334,9 @@ pub fn scale_simulator_preview_frame(config: ScaleSimulatorConfig) -> Result<Str
 }
 
 #[tauri::command]
-pub async fn scale_simulator_start(config: ScaleSimulatorConfig) -> Result<ScaleSimulatorActionResult, String> {
+pub async fn scale_simulator_start(
+    config: ScaleSimulatorConfig,
+) -> Result<ScaleSimulatorActionResult, String> {
     validate_config(&config)?;
     prune_finished_simulators()?;
     let id = config
@@ -426,13 +428,16 @@ pub async fn scale_simulator_start(config: ScaleSimulatorConfig) -> Result<Scale
         push_log(
             &logs,
             "info",
-            format!("Iniciando simulador {} na porta TCP {}.", config.name, config.port),
+            format!(
+                "Iniciando simulador {} na porta TCP {}.",
+                config.name, config.port
+            ),
         );
         let listener = StdTcpListener::bind(&bind_addr)
             .map_err(|err| format!("Falha ao abrir porta TCP {bind_addr}: {err}"))?;
-        listener
-            .set_nonblocking(true)
-            .map_err(|err| format!("Falha ao configurar porta TCP {bind_addr} como non-blocking: {err}"))?;
+        listener.set_nonblocking(true).map_err(|err| {
+            format!("Falha ao configurar porta TCP {bind_addr} como non-blocking: {err}")
+        })?;
         let listener = TcpListener::from_std(listener)
             .map_err(|err| format!("Falha ao converter listener TCP {bind_addr}: {err}"))?;
         tokio::spawn(async move {
@@ -543,7 +548,10 @@ pub fn scale_simulator_logs(id: String) -> Result<Vec<ScaleSimulatorLogEntry>, S
 }
 
 #[tauri::command]
-pub fn scale_simulator_set_weight(id: String, weight_kg: f64) -> Result<ScaleSimulatorActionResult, String> {
+pub fn scale_simulator_set_weight(
+    id: String,
+    weight_kg: f64,
+) -> Result<ScaleSimulatorActionResult, String> {
     with_runtime(&id, |runtime| {
         {
             let mut state = runtime
@@ -567,7 +575,11 @@ pub fn scale_simulator_set_weight(id: String, weight_kg: f64) -> Result<ScaleSim
 }
 
 #[tauri::command]
-pub fn scale_simulator_action(id: String, action: String, value: Option<f64>) -> Result<ScaleSimulatorActionResult, String> {
+pub fn scale_simulator_action(
+    id: String,
+    action: String,
+    value: Option<f64>,
+) -> Result<ScaleSimulatorActionResult, String> {
     with_runtime(&id, |runtime| {
         let action_normalized = action.trim().to_lowercase();
         {
@@ -584,7 +596,11 @@ pub fn scale_simulator_action(id: String, action: String, value: Option<f64>) ->
                 "tare" | "tarar" => {
                     state.tare_kg = value.unwrap_or(state.gross_kg).max(0.0);
                     state.gross_mode = false;
-                    push_log(&runtime.logs, "info", format!("Tara aplicada: {:.3} kg.", state.tare_kg));
+                    push_log(
+                        &runtime.logs,
+                        "info",
+                        format!("Tara aplicada: {:.3} kg.", state.tare_kg),
+                    );
                 }
                 "clear_tare" | "limpar_tara" => {
                     state.tare_kg = 0.0;
@@ -605,7 +621,11 @@ pub fn scale_simulator_action(id: String, action: String, value: Option<f64>) ->
                 }
                 "unstable" | "oscilando" => {
                     state.stable = false;
-                    push_log(&runtime.logs, "info", "Status oscilando ativado.".to_string());
+                    push_log(
+                        &runtime.logs,
+                        "info",
+                        "Status oscilando ativado.".to_string(),
+                    );
                 }
                 _ => return Err("Ação inválida para o simulador.".to_string()),
             }
@@ -633,8 +653,9 @@ impl ScaleSimulatorMode {
 }
 
 fn list_serial_ports_with_usage() -> Result<Vec<ScaleSimulatorSerialPortInfo>, String> {
-    let ports = serialport::available_ports()
-        .map_err(|err| format!("Falha ao identificar portas seriais RS232/COM do computador: {err}"))?;
+    let ports = serialport::available_ports().map_err(|err| {
+        format!("Falha ao identificar portas seriais RS232/COM do computador: {err}")
+    })?;
 
     let active_serial_ports = SIMULATORS
         .lock()
@@ -730,12 +751,13 @@ fn serial_port_sort_key(port_name: &str) -> (String, u32, String) {
     (prefix, number, trimmed)
 }
 
-
 fn prune_finished_simulators() -> Result<(), String> {
     let mut simulators = SIMULATORS
         .lock()
         .map_err(|_| "Falha ao limpar simuladores finalizados.".to_string())?;
-    simulators.retain(|_, runtime| !runtime.shutdown.load(Ordering::SeqCst) && !runtime.task.is_finished());
+    simulators.retain(|_, runtime| {
+        !runtime.shutdown.load(Ordering::SeqCst) && !runtime.task.is_finished()
+    });
     Ok(())
 }
 
@@ -792,7 +814,10 @@ fn preflight_serial_port(config: &ScaleSimulatorConfig) -> Result<(), String> {
     }
 }
 
-fn with_runtime<T>(id: &str, callback: impl FnOnce(&SimulatorRuntime) -> Result<T, String>) -> Result<T, String> {
+fn with_runtime<T>(
+    id: &str,
+    callback: impl FnOnce(&SimulatorRuntime) -> Result<T, String>,
+) -> Result<T, String> {
     let simulators = SIMULATORS
         .lock()
         .map_err(|_| "Falha ao bloquear lista de simuladores.".to_string())?;
@@ -897,7 +922,11 @@ async fn run_tcp_server(
 
     loop {
         if shutdown.load(Ordering::SeqCst) {
-            push_log(&logs, "info", "Servidor TCP finalizado por solicitação do usuário.".to_string());
+            push_log(
+                &logs,
+                "info",
+                "Servidor TCP finalizado por solicitação do usuário.".to_string(),
+            );
             break;
         }
 
@@ -946,7 +975,9 @@ async fn handle_tcp_client(
         }
 
         if config.mode.is_command() {
-            match tokio::time::timeout(Duration::from_millis(250), stream.read(&mut read_buffer)).await {
+            match tokio::time::timeout(Duration::from_millis(250), stream.read(&mut read_buffer))
+                .await
+            {
                 Ok(Ok(size)) if size > 0 => {
                     let command = String::from_utf8_lossy(&read_buffer[..size]).to_string();
                     let response = handle_protocol_command(&command, &config, &state, &logs);
@@ -1002,7 +1033,10 @@ fn run_serial_loop(
     push_log(
         &logs,
         "info",
-        format!("Porta serial {serial_name} aberta em {} bps.", config.baud_rate),
+        format!(
+            "Porta serial {serial_name} aberta em {} bps.",
+            config.baud_rate
+        ),
     );
 
     let mut read_buffer = [0_u8; 1024];
@@ -1013,7 +1047,11 @@ fn run_serial_loop(
                     let command = String::from_utf8_lossy(&read_buffer[..size]).to_string();
                     if let Some(frame) = handle_protocol_command(&command, &config, &state, &logs) {
                         if let Err(err) = port.write_all(frame.as_bytes()) {
-                            push_log(&logs, "error", format!("Falha ao escrever em {serial_name}: {err}"));
+                            push_log(
+                                &logs,
+                                "error",
+                                format!("Falha ao escrever em {serial_name}: {err}"),
+                            );
                             break;
                         }
                     }
@@ -1029,7 +1067,11 @@ fn run_serial_loop(
             apply_variation(&config, &state);
             let frame = frame_and_update_last(&config, &state);
             if let Err(err) = port.write_all(frame.as_bytes()) {
-                push_log(&logs, "error", format!("Falha ao escrever em {serial_name}: {err}"));
+                push_log(
+                    &logs,
+                    "error",
+                    format!("Falha ao escrever em {serial_name}: {err}"),
+                );
                 break;
             }
             std::thread::sleep(Duration::from_millis(config.interval_ms));
@@ -1037,7 +1079,11 @@ fn run_serial_loop(
     }
 
     clients.store(0, Ordering::SeqCst);
-    push_log(&logs, "info", format!("Porta serial {serial_name} finalizada."));
+    push_log(
+        &logs,
+        "info",
+        format!("Porta serial {serial_name} finalizada."),
+    );
 }
 
 fn handle_protocol_command(
@@ -1046,7 +1092,10 @@ fn handle_protocol_command(
     state: &Arc<Mutex<ScaleState>>,
     logs: &Arc<Mutex<VecDeque<ScaleSimulatorLogEntry>>>,
 ) -> Option<String> {
-    let normalized = raw_command.trim_matches(char::from(0)).trim().to_uppercase();
+    let normalized = raw_command
+        .trim_matches(char::from(0))
+        .trim()
+        .to_uppercase();
     if normalized.is_empty()
         || normalized == "P"
         || normalized == "PESO"
@@ -1092,7 +1141,11 @@ fn handle_protocol_command(
             return Some(frame_and_update_last(config, state));
         }
     }
-    push_log(logs, "warn", format!("Comando remoto ignorado: {normalized}."));
+    push_log(
+        logs,
+        "warn",
+        format!("Comando remoto ignorado: {normalized}."),
+    );
     Some(frame_and_update_last(config, state))
 }
 
@@ -1104,7 +1157,10 @@ fn apply_variation(config: &ScaleSimulatorConfig, state: &Arc<Mutex<ScaleState>>
         let seed = Utc::now().timestamp_millis() as f64;
         let wave = (seed / 1000.0).sin() * config.variation_kg;
         let next = guard.gross_kg + wave;
-        guard.gross_kg = normalize_weight(next.clamp(-config.capacity_kg, config.capacity_kg), config.division_kg);
+        guard.gross_kg = normalize_weight(
+            next.clamp(-config.capacity_kg, config.capacity_kg),
+            config.division_kg,
+        );
         guard.stable = config.stable && wave.abs() < config.division_kg;
     }
 }
@@ -1145,7 +1201,11 @@ fn frame_and_update_last(config: &ScaleSimulatorConfig, state: &Arc<Mutex<ScaleS
 
 fn build_frame(config: &ScaleSimulatorConfig, state: &ScaleState) -> String {
     let net_kg = state.gross_kg - state.tare_kg;
-    let display_kg = if state.gross_mode { state.gross_kg } else { net_kg };
+    let display_kg = if state.gross_mode {
+        state.gross_kg
+    } else {
+        net_kg
+    };
     let sign = if display_kg < 0.0 { '-' } else { '+' };
     let unit = config.unit.trim();
     let scaled = display_kg.abs().round() as i64;
@@ -1158,7 +1218,12 @@ fn build_frame(config: &ScaleSimulatorConfig, state: &ScaleState) -> String {
         // parts[0] == "0" significa estável; parts[1]=bruto; parts[2]=tara; parts[3]=líquido.
         ScaleSimulatorDriver::Wt1000n => {
             let status = if state.stable { "0" } else { "1" };
-            format!("{status},{},{},{}\r\n", signed_value(state.gross_kg), signed_value(state.tare_kg), signed_value(net_kg))
+            format!(
+                "{status},{},{},{}\r\n",
+                signed_value(state.gross_kg),
+                signed_value(state.tare_kg),
+                signed_value(net_kg)
+            )
         }
         ScaleSimulatorDriver::Wt27r => format!("={sign}{scaled:06}{unit}\r\n"),
         // Compatível com o parser WT3000IR do ADP: status em parts[0] e números em parts[2].
@@ -1195,7 +1260,10 @@ fn signed_value(value: f64) -> String {
     }
 }
 
-fn status_from_runtime(id: &str, runtime: &SimulatorRuntime) -> Result<ScaleSimulatorStatus, String> {
+fn status_from_runtime(
+    id: &str,
+    runtime: &SimulatorRuntime,
+) -> Result<ScaleSimulatorStatus, String> {
     let state = runtime
         .state
         .lock()
@@ -1216,7 +1284,11 @@ fn status_from_runtime(id: &str, runtime: &SimulatorRuntime) -> Result<ScaleSimu
         frame_override_enabled: runtime.config.frame_override_enabled,
         running: !runtime.shutdown.load(Ordering::SeqCst),
         clients: runtime.clients.load(Ordering::SeqCst),
-        weight_kg: if state.gross_mode { state.gross_kg } else { net_kg },
+        weight_kg: if state.gross_mode {
+            state.gross_kg
+        } else {
+            net_kg
+        },
         gross_kg: state.gross_kg,
         tare_kg: state.tare_kg,
         net_kg,
