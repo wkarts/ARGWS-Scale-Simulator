@@ -1,0 +1,41 @@
+name: Cache cleanup
+on:
+  schedule:
+    - cron: '43 4 * * *'
+  workflow_dispatch:
+  workflow_run:
+    workflows: [CI, Release]
+    types: [completed]
+permissions:
+  actions: write
+  contents: read
+concurrency:
+  group: scale-cache-cleanup
+  cancel-in-progress: false
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo;
+            // Never evict caches while another run may be reading/writing them.
+            for (const status of ['in_progress', 'queued', 'waiting', 'pending', 'requested']) {
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {...repo, status, per_page: 100});
+              if (runs.some(run => run.id !== context.runId)) {
+                core.notice('Active/queued workflow: cleanup deferred.'); return;
+              }
+            }
+            const caches = await github.paginate(github.rest.actions.getActionsCacheList, {...repo, per_page: 100});
+            caches.sort((a,b) => new Date(a.last_accessed_at) - new Date(b.last_accessed_at));
+            const limit = 6 * 1024 ** 3;
+            const cutoff = Date.now() - 7 * 86400_000;
+            let total = caches.reduce((sum,c) => sum + c.size_in_bytes, 0);
+            for (const cache of caches) {
+              if (total <= limit && new Date(cache.last_accessed_at).getTime() >= cutoff) continue;
+              await github.rest.actions.deleteActionsCacheById({...repo, cache_id: cache.id});
+              total -= cache.size_in_bytes;
+              core.info(`Removed cache ${cache.id}; remaining ${(total/1024**3).toFixed(2)} GiB`);
+            }

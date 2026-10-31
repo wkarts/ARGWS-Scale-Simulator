@@ -35,7 +35,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
       - name: Instalar dependências mínimas
         run: npm ci --prefer-offline --no-audit --no-fund
@@ -52,12 +52,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
       - name: Instalar dependências frontend
         run: npm ci --prefer-offline --no-audit --no-fund
       - name: Validar sincronismo de versão
         run: npm run ci:version
+      - name: Protocol and release tests
+        run: node --test tests/*.test.mjs scripts/release/tests/*.test.mjs
       - name: Typecheck
         run: npm run typecheck
       - name: Build web
@@ -126,7 +128,7 @@ jobs:
         if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
           version: 1.0
       - name: Rust stable com clippy
         if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
@@ -139,15 +141,18 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
           cache-on-failure: true
+      - name: Prepare desktop frontend
+        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
+        run: npm ci --no-audit --no-fund && npm run build:web
       - name: cargo clippy
         if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
       - name: cargo test
         if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
-        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --all-targets --all-features
       - name: Build Rust features opcionais
         if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
         run: |
-          cargo build --manifest-path src-tauri/Cargo.toml --features mysql-db
-          cargo build --manifest-path src-tauri/Cargo.toml --features postgres-db
-          cargo build --manifest-path src-tauri/Cargo.toml --features mysql-db,postgres-db
+          cargo build --locked --manifest-path src-tauri/Cargo.toml --features mysql-db
+          cargo build --locked --manifest-path src-tauri/Cargo.toml --features postgres-db
+          cargo build --locked --manifest-path src-tauri/Cargo.toml --features mysql-db,postgres-db

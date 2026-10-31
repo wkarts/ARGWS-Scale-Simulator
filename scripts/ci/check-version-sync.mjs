@@ -28,7 +28,15 @@ if (!projectVersionMatch) {
   process.exit(1);
 }
 
+const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+const cargoLock = fs.readFileSync(path.join(root, 'src-tauri/Cargo.lock'), 'utf8');
+const crateName = cargoToml.match(/\[package\][\s\S]*?^name\s*=\s*"([^"]+)"/m)[1];
+const ownBlock = cargoLock.split('[[package]]').find(block => block.match(/^\s*name = "([^"]+)"/)?.[1] === crateName);
+const ownVersion = ownBlock?.match(/^version = "([^"]+)"/m)?.[1];
 const versions = {
+  'package-lock.json': lock.version,
+  'package-lock.json root': lock.packages[''].version,
+  'src-tauri/Cargo.lock': ownVersion,
   'VERSION': versionFile,
   'package.json': packageJson.version,
   'src-tauri/Cargo.toml': cargoMatch[1],

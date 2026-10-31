@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const version = process.argv[2];
-if (!version) {
+if (!version || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-beta\.(0|[1-9]\d*))?$/.test(version)) {
   console.error('Uso: node scripts/release/prepare-release.mjs <version>');
   process.exit(1);
 }
@@ -66,3 +66,18 @@ updateTauriConf();
 updateCargoToml();
 updateProjectConfig();
 console.log(`Versão atualizada para ${version}`);
+
+// Keep only this project's package entry in Cargo.lock synchronized.
+const lockPath = path.join(root, 'src-tauri', 'Cargo.lock');
+const cargoName = fs.readFileSync(path.join(root, 'src-tauri', 'Cargo.toml'), 'utf8').match(/\[package\][\s\S]*?^name\s*=\s*"([^"]+)"/m)[1];
+const lock = fs.readFileSync(lockPath, 'utf8');
+const blocks = lock.split('[[package]]');
+let found = false;
+for (let i = 1; i < blocks.length; i++) {
+  if (blocks[i].match(/^\s*name = "([^"]+)"/)[1] === cargoName) {
+    blocks[i] = blocks[i].replace(/^version = "[^"]+"/m, `version = "${version}"`);
+    found = true;
+  }
+}
+if (!found) throw new Error('Project missing from Cargo.lock');
+fs.writeFileSync(lockPath, blocks.join('[[package]]'));

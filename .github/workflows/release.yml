@@ -1,166 +1,151 @@
 name: Release
-
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main, develop]
   workflow_dispatch:
-
 permissions:
-  contents: write
-
+  contents: read
+concurrency:
+  group: scale-release
+  cancel-in-progress: false
 jobs:
-  validate-frontend:
+  prepare:
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && (github.ref_name == 'main' || github.ref_name == 'develop'))
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-      - name: Instalar dependências frontend
-        run: npm ci --prefer-offline --no-audit --no-fund
-      - name: Validar sincronismo de versão
-        run: npm run ci:version
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Build web
-        run: npm run build:web
-
-  validate-rust:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Cache pacotes apt Tauri
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-          version: 1.0
-      - name: Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - name: Cache Rust
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-      - name: cargo fmt --check
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
-      - name: cargo clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
-      - name: cargo test
-        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features
-      - name: Build Rust features opcionais
-        run: |
-          cargo build --manifest-path src-tauri/Cargo.toml --features mysql-db
-          cargo build --manifest-path src-tauri/Cargo.toml --features postgres-db
-          cargo build --manifest-path src-tauri/Cargo.toml --features mysql-db,postgres-db
-
-  prepare-release:
-    needs: [validate-frontend, validate-rust]
-    runs-on: ubuntu-latest
-    outputs:
-      published: ${{ steps.semantic.outputs.published }}
-      version: ${{ steps.semantic.outputs.version }}
-      tag: ${{ steps.semantic.outputs.tag }}
-      name: ${{ steps.semantic.outputs.name }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-      - name: Instalar dependências frontend
-        run: npm ci --prefer-offline --no-audit --no-fund
-      - name: Semantic release
-        id: semantic
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node ./scripts/release/run-semantic-release.mjs
-
-  publish-tauri:
-    needs: prepare-release
-    if: needs.prepare-release.outputs.published == 'true'
+    timeout-minutes: 15
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: --target aarch64-apple-darwin
-            rust_target: aarch64-apple-darwin
-          - platform: macos-latest
-            args: --target x86_64-apple-darwin
-            rust_target: x86_64-apple-darwin
-          - platform: ubuntu-22.04
-            args: ''
-            rust_target: ''
-          - platform: windows-latest
-            args: ''
-            rust_target: ''
-          - platform: windows-latest
-            args: --target i686-pc-windows-msvc
-            rust_target: i686-pc-windows-msvc
-    runs-on: ${{ matrix.platform }}
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+    outputs:
+      tag: ${{ steps.prepare.outputs.tag }}
+      version: ${{ steps.prepare.outputs.version }}
+      prerelease: ${{ steps.prepare.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare-release.outputs.tag }}
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
-      - name: Validar versão x tag de release
-        run: node ./scripts/ci/check-version-sync.mjs --tag ${{ needs.prepare-release.outputs.tag }}
-      - name: Dependências Linux para Tauri
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - name: Importar certificado Windows
-        if: runner.os == 'Windows' && env.WINDOWS_CERTIFICATE != ''
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path certificate | Out-Null
-          Set-Content -Path certificate\tempCert.txt -Value $env:WINDOWS_CERTIFICATE
-          certutil -decode certificate\tempCert.txt certificate\certificate.pfx
-          Remove-Item certificate\tempCert.txt
-          $secure = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
-          Import-PfxCertificate -FilePath certificate\certificate.pfx -CertStoreLocation Cert:\CurrentUser\My -Password $secure
-      - name: Rust stable (default)
-        if: matrix.rust_target == ''
-        uses: dtolnay/rust-toolchain@stable
-      - name: Rust stable (target adicional)
-        if: matrix.rust_target != ''
-        uses: dtolnay/rust-toolchain@stable
+      - run: npm ci --no-audit --no-fund
+      - run: npm run ci:version && npm run ci:tauri && node --test tests/*.test.mjs scripts/release/tests/*.test.mjs
+      - run: npm run build:web
+      - id: prepare
+        env:
+          GITHUB_REF_NAME: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        run: node scripts/release/prepare-ci.mjs
+  desktop:
+    needs: prepare
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: i686-pc-windows-msvc
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
         with:
-          targets: ${{ matrix.rust_target }}
-      - name: Cache Rust
-        uses: swatinem/rust-cache@v2
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Short Windows build path
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '"CARGO_TARGET_DIR=C:\scale-target" >> $env:GITHUB_ENV'
+      - uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-      - name: Instalar dependências frontend
-        run: npm ci --prefer-offline --no-audit --no-fund
-      - name: Publicar binários Tauri
-        uses: tauri-apps/tauri-action@v0
+          key: release-${{ matrix.target }}
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/ci/check-version-sync.mjs --tag ${{ needs.prepare.outputs.tag }}
+      - run: npm run tauri -- build --locked --target ${{ matrix.target }}
+      - name: Collect platform bundles
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: python scripts/release/collect-assets.py
+      - uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ needs.prepare-release.outputs.tag }}
-          releaseName: Template App v${{ needs.prepare-release.outputs.version }}
-          releaseBody: Confira o CHANGELOG.md e os assets desta versão.
-          releaseDraft: false
-          prerelease: false
-          includeUpdaterJson: false
-          args: ${{ matrix.args }}
+          name: desktop-${{ matrix.target }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
+  web:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund && npm run build:web
+      - env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir release-assets
+          (cd dist && zip -qr ../release-assets/Scale-Simulator-${VERSION}-web.zip .)
+          git archive --format=zip -o release-assets/Scale-Simulator-${VERSION}-sources.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-sources
+          path: release-assets/*
+          retention-days: 7
+  publish:
+    needs: [prepare, desktop, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Checksums and manifest
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: python scripts/release/checksums.py
+      - name: Publish only the complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release already exists: no assets will be overwritten."
+            exit 0
+          fi
+          FLAGS=()
+          if [ "$PRERELEASE" = "true" ]; then FLAGS+=(--prerelease --latest=false); else FLAGS+=(--latest); fi
+          gh release create "$TAG" release-assets/* --verify-tag --title "Scale Simulator $TAG" --generate-notes "${FLAGS[@]}"
