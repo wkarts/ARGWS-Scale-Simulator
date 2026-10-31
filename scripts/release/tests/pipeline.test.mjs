@@ -20,3 +20,11 @@ test('checksums require all targets, not just any seven files',()=>{
  const script=read('scripts/release/checksums.py');
  for(const target of ['x86_64-pc-windows-msvc','i686-pc-windows-msvc','x86_64-unknown-linux-gnu','aarch64-apple-darwin','x86_64-apple-darwin','-web.zip','-sources.zip'])assert.ok(script.includes(target));
 });
+
+test('Tauri wrapper owns the Cargo locked argument; workflow must not pass it as a Tauri option',()=>{
+ const workflow=read('.github/workflows/release.yml');
+ assert.match(workflow,/npm run tauri -- build --target/);
+ assert.doesNotMatch(workflow,/npm run tauri -- build --locked/);
+ assert.match(workflow,/asset.digest/);
+ assert.match(workflow,/Digest mismatch/);
+});
