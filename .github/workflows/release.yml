@@ -1,0 +1,166 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Instalar dependências frontend
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Validar sincronismo de versão
+        run: npm run ci:version
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build web
+        run: npm run build:web
+
+  validate-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache pacotes apt Tauri
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: 1.0
+      - name: Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: cargo fmt --check
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
+      - name: cargo clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features
+      - name: Build Rust features opcionais
+        run: |
+          cargo build --manifest-path src-tauri/Cargo.toml --features mysql-db
+          cargo build --manifest-path src-tauri/Cargo.toml --features postgres-db
+          cargo build --manifest-path src-tauri/Cargo.toml --features mysql-db,postgres-db
+
+  prepare-release:
+    needs: [validate-frontend, validate-rust]
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.semantic.outputs.published }}
+      version: ${{ steps.semantic.outputs.version }}
+      tag: ${{ steps.semantic.outputs.tag }}
+      name: ${{ steps.semantic.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Instalar dependências frontend
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Semantic release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node ./scripts/release/run-semantic-release.mjs
+
+  publish-tauri:
+    needs: prepare-release
+    if: needs.prepare-release.outputs.published == 'true'
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            rust_target: aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            rust_target: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ''
+            rust_target: ''
+          - platform: windows-latest
+            args: ''
+            rust_target: ''
+          - platform: windows-latest
+            args: --target i686-pc-windows-msvc
+            rust_target: i686-pc-windows-msvc
+    runs-on: ${{ matrix.platform }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.tag }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Validar versão x tag de release
+        run: node ./scripts/ci/check-version-sync.mjs --tag ${{ needs.prepare-release.outputs.tag }}
+      - name: Dependências Linux para Tauri
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Importar certificado Windows
+        if: runner.os == 'Windows' && env.WINDOWS_CERTIFICATE != ''
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path certificate | Out-Null
+          Set-Content -Path certificate\tempCert.txt -Value $env:WINDOWS_CERTIFICATE
+          certutil -decode certificate\tempCert.txt certificate\certificate.pfx
+          Remove-Item certificate\tempCert.txt
+          $secure = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          Import-PfxCertificate -FilePath certificate\certificate.pfx -CertStoreLocation Cert:\CurrentUser\My -Password $secure
+      - name: Rust stable (default)
+        if: matrix.rust_target == ''
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust stable (target adicional)
+        if: matrix.rust_target != ''
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Instalar dependências frontend
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Publicar binários Tauri
+        uses: tauri-apps/tauri-action@v0
+        with:
+          tagName: ${{ needs.prepare-release.outputs.tag }}
+          releaseName: Template App v${{ needs.prepare-release.outputs.version }}
+          releaseBody: Confira o CHANGELOG.md e os assets desta versão.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: false
+          args: ${{ matrix.args }}

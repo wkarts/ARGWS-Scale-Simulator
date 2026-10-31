@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full_rust_ci:
+        description: 'Executar validação Rust completa com dependências Tauri Linux'
+        required: false
+        default: 'true'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+
+jobs:
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Instalar dependências mínimas
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Validar título do PR
+        run: npm run ci:pr-title
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Instalar dependências frontend
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Validar sincronismo de versão
+        run: npm run ci:version
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build web
+        run: npm run build:web
+
+  rust-format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust stable com rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: cargo fmt --check
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
+
+  rust-check:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detectar alterações Rust/Tauri
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            CHANGED_FILES=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)
+          else
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+          fi
+
+          echo "$CHANGED_FILES"
+          if echo "$CHANGED_FILES" | grep -E '^(src-tauri/|Cargo\.toml|Cargo\.lock|rustfmt\.toml|\.github/workflows/|scripts/(fix-rust-format|.*rust).*)' >/dev/null; then
+            echo "rust_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rust_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Definir se executa Rust completo
+        id: full
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_FULL="false"
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            RUN_FULL="true"
+          fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.full_rust_ci }}" = "true" ]; then
+            RUN_FULL="true"
+          fi
+          echo "run_full=$RUN_FULL" >> "$GITHUB_OUTPUT"
+      - name: Validação Rust completa ignorada na PR
+        if: steps.full.outputs.run_full != 'true'
+        run: |
+          echo "PR rápida: rust-format já validou rustfmt."
+          echo "Clippy/test/features completos rodam em push/main/release ou workflow_dispatch."
+          echo "Use workflow_dispatch com full_rust_ci=true para validação completa sob demanda."
+      - name: Sem alterações Rust/Tauri
+        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed != 'true'
+        run: echo "Nenhuma alteração Rust/Tauri detectada. Pulando clippy/test/features."
+      - name: Cache pacotes apt Tauri
+        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: 1.0
+      - name: Rust stable com clippy
+        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Cache Rust
+        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          cache-on-failure: true
+      - name: cargo clippy
+        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: cargo test
+        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets --all-features
+      - name: Build Rust features opcionais
+        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
+        run: |
+          cargo build --manifest-path src-tauri/Cargo.toml --features mysql-db
+          cargo build --manifest-path src-tauri/Cargo.toml --features postgres-db
+          cargo build --manifest-path src-tauri/Cargo.toml --features mysql-db,postgres-db
