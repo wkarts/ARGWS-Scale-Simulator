@@ -12,7 +12,7 @@ export const projectConfig = {
     windowTitle: "Scale Simulator",
     subtitle: "Laboratório de pesagem • TCP / RS232",
     description: "Simulação de balanças e indicadores para testar integrações TCP e RS232.",
-    version: "0.2.0",
+    version: "0.2.1",
     mode: "desktop" as RuntimeMode,
     identifier: "br.com.wkarts.scale-simulator-tauri",
     developer: "Wallace Kleiton",

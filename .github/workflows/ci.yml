@@ -64,6 +64,10 @@ jobs:
         run: npm run typecheck
       - name: Build web
         run: npm run build:web
+      - name: Install component-test browser
+        run: npx playwright install --with-deps chromium
+      - name: Compact model controls at desktop/mobile widths
+        run: npm run test:models:browser
 
   rust-format:
     runs-on: ubuntu-latest

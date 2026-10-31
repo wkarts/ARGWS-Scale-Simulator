@@ -6,9 +6,9 @@
   "publisher": "WK Arts",
   "theme": "scale-blue",
   "transparentAssets": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "artifactPrefix": "scale-simulator",
   "windowTitle": "Scale Simulator",
-  "description": "Simulador de balanças TCP e RS232 para testes de integração.",
+  "description": "Simulador de balan\u00e7as TCP e RS232 para testes de integra\u00e7\u00e3o.",
   "localDataDir": "scale_simulator_tauri"
 }
