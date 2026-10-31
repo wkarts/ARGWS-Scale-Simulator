@@ -1,3 +1,4 @@
 fn main() {
-    tauri_build::build()
+    #[cfg(any(feature = "desktop", feature = "mobile"))]
+    tauri_build::build();
 }

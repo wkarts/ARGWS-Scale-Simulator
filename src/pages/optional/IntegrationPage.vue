@@ -4,6 +4,7 @@ import { invokeCommand } from "../../services/tauri";
 import BasePage from "../../components/base/BasePage.vue";
 import BaseSectionCard from "../../components/base/BaseSectionCard.vue";
 import AppModal from "../../components/AppModal.vue";
+import { appConfirm } from "../../services/dialog";
 
 type Integration = {
   id?: number;
@@ -98,7 +99,8 @@ async function test(item: Integration) {
 }
 
 async function remove(item: Integration) {
-  if (!item.id || !confirm(`Excluir integração ${item.nome}?`)) return;
+  if (!item.id) return;
+  if (!(await appConfirm({ title: "Excluir integração", message: `Excluir integração ${item.nome}?`, danger: true, confirmText: "Excluir" }))) return;
   await invokeCommand("integration_delete", { id: item.id });
   await load();
 }

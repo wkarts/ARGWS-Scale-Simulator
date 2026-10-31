@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::env;
-#[cfg(target_os = "linux")]
-use std::fs;
 use std::path::PathBuf;
 
 use crate::models::LicenseCheckInput;
@@ -174,7 +172,7 @@ fn os_version() -> String {
     }
     #[cfg(target_os = "linux")]
     {
-        let release = fs::read_to_string("/etc/os-release").unwrap_or_default();
+        let release = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
         release
             .lines()
             .find(|l| l.starts_with("PRETTY_NAME="))
@@ -200,7 +198,7 @@ fn machine_guid() -> String {
     {
         let candidates = ["/etc/machine-id", "/var/lib/dbus/machine-id"];
         for path in candidates {
-            let content = fs::read_to_string(path)
+            let content = std::fs::read_to_string(path)
                 .unwrap_or_default()
                 .trim()
                 .to_string();
@@ -227,11 +225,12 @@ fn bios_serial() -> String {
     }
     #[cfg(target_os = "linux")]
     {
-        let val = fs::read_to_string("/sys/class/dmi/id/bios_version").unwrap_or_default();
-        if !val.trim().is_empty() {
-            val.trim().to_string()
-        } else {
+        let val = std::fs::read_to_string("/sys/class/dmi/id/bios_version").unwrap_or_default();
+        let val = val.trim();
+        if val.is_empty() {
             String::new()
+        } else {
+            val.to_string()
         }
     }
     #[cfg(target_os = "macos")]
@@ -251,11 +250,12 @@ fn motherboard_serial() -> String {
     }
     #[cfg(target_os = "linux")]
     {
-        let val = fs::read_to_string("/sys/class/dmi/id/board_serial").unwrap_or_default();
-        if !val.trim().is_empty() {
-            val.trim().to_string()
-        } else {
+        let val = std::fs::read_to_string("/sys/class/dmi/id/board_serial").unwrap_or_default();
+        let val = val.trim();
+        if val.is_empty() {
             String::new()
+        } else {
+            val.to_string()
         }
     }
     #[cfg(target_os = "macos")]
@@ -275,11 +275,12 @@ fn system_serial_number() -> String {
     }
     #[cfg(target_os = "linux")]
     {
-        let val = fs::read_to_string("/sys/class/dmi/id/product_uuid").unwrap_or_default();
-        if !val.trim().is_empty() {
-            val.trim().to_string()
-        } else {
+        let val = std::fs::read_to_string("/sys/class/dmi/id/product_uuid").unwrap_or_default();
+        let val = val.trim();
+        if val.is_empty() {
             String::new()
+        } else {
+            val.to_string()
         }
     }
     #[cfg(target_os = "macos")]
@@ -306,10 +307,10 @@ fn mac_addresses() -> Vec<String> {
     #[cfg(target_os = "linux")]
     {
         let mut macs = Vec::new();
-        if let Ok(entries) = fs::read_dir("/sys/class/net") {
+        if let Ok(entries) = std::fs::read_dir("/sys/class/net") {
             for entry in entries.flatten() {
                 let addr_path = entry.path().join("address");
-                let value = fs::read_to_string(addr_path).unwrap_or_default();
+                let value = std::fs::read_to_string(addr_path).unwrap_or_default();
                 let mac = value.trim().to_string();
                 if !mac.is_empty() && mac != "00:00:00:00:00:00" {
                     macs.push(mac);

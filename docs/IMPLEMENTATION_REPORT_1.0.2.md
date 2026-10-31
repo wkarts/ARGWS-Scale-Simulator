@@ -1,4 +1,4 @@
-# Template App Tauri Desktop Web 1.0.2 — Correções concluídas
+# Scale Simulator Tauri Desktop Web 1.0.2 — Correções concluídas
 
 ## Status
 
@@ -41,11 +41,11 @@ Versão corrigida para uso como template único Web/PWA/Tauri, mantendo a base e
   - parar API interna;
   - sair definitivamente.
 - Diretório de dados agora pode ser herdado em apps derivados via variáveis:
-  - `TEMPLATE_APP_LOCAL_DATA_DIR`;
+  - `SCALE_SIMULATOR_LOCAL_DATA_DIR`;
   - `APP_LOCAL_DATA_DIR`.
 - Nome/identificador runtime podem ser herdados via:
-  - `TEMPLATE_APP_NAME` / `APP_NAME`;
-  - `TEMPLATE_APP_IDENTIFIER` / `APP_IDENTIFIER`.
+  - `SCALE_SIMULATOR_NAME` / `APP_NAME`;
+  - `SCALE_SIMULATOR_IDENTIFIER` / `APP_IDENTIFIER`.
 
 ## Validação executada neste ambiente
 
@@ -120,5 +120,5 @@ fix(template): stabilize desktop-web runtime, branding, tray and user page
 Descrição:
 
 ```text
-Este PR estabiliza o template-app-tauri-desktop-web como base única para Web/PWA/Tauri, corrigindo inicialização, portas de desenvolvimento, branding herdável, menu, tray icon, API interna, Scalar, cadastro de usuários e compatibilidade de diretórios em aplicações derivadas.
+Este PR estabiliza o ARGWS-Scale-Simulator-web como base única para Web/PWA/Tauri, corrigindo inicialização, portas de desenvolvimento, branding herdável, menu, tray icon, API interna, Scalar, cadastro de usuários e compatibilidade de diretórios em aplicações derivadas.
 ```

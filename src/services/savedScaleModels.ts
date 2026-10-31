@@ -1,4 +1,6 @@
-import { invokeCommand } from './tauri';
+import { useSessionStore } from '../stores/session';
+function invokeCommand<T>(name:string,args:Record<string,unknown>={}) { return rawInvoke<T>(name,{...args,session_token:useSessionStore().sessionToken}); }
+import { invokeCommand as rawInvoke } from './tauri';
 import { defaultScaleConfig, type ScaleSimulatorConfig } from './scaleSimulator';
 export interface SavedScaleModel { id:string; name:string; config:ScaleSimulatorConfig; revision:number }
 export function modelForm(model:SavedScaleModel):ScaleSimulatorConfig { return {...defaultScaleConfig(),...JSON.parse(JSON.stringify(model.config)),id:null}; }

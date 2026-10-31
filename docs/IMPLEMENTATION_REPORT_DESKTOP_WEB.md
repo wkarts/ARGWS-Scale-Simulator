@@ -1,9 +1,9 @@
-# Relatório de implementação — template-app-tauri-desktop-web
+# Relatório de implementação — ARGWS-Scale-Simulator-web
 
 ## Escopo concluído
 
-- Mantida a base original do `template-app-tauri-desktop`.
-- Criado novo pacote com nome `template-app-tauri-desktop-web`.
+- Mantida a base original do `ARGWS-Scale-Simulator`.
+- Criado novo pacote com nome `ARGWS-Scale-Simulator-web`.
 - Versão ajustada para `1.1.0`.
 - Criada arquitetura híbrida Web/PWA/Tauri baseada em providers.
 - Mantida compatibilidade com `src/services/tauri.ts`.
@@ -43,7 +43,7 @@ npm run tauri:build
 ## Branch semântica sugerida
 
 ```text
-feature/template-app-tauri-desktop-web
+feature/ARGWS-Scale-Simulator-web
 ```
 
 ## Título do PR
@@ -55,7 +55,7 @@ feat(template): add unified Web/PWA/Tauri desktop-web architecture
 ## Descrição do PR
 
 ```text
-Este PR evolui o Template App Tauri Desktop para uma base híbrida `template-app-tauri-desktop-web`, mantendo o visual, as telas e os módulos existentes em uma única aplicação compatível com Web, PWA e Tauri.
+Este PR evolui o Scale Simulator Tauri Desktop para uma base híbrida `ARGWS-Scale-Simulator-web`, mantendo o visual, as telas e os módulos existentes em uma única aplicação compatível com Web, PWA e Tauri.
 
 A implementação adiciona providers de runtime, comandos, banco Web via IndexedDB, filesystem, notificações, impressão e diagnóstico. O frontend deixa de depender diretamente do Tauri fora da camada core, permitindo que o mesmo projeto rode no navegador e no desktop com equivalência funcional.
 

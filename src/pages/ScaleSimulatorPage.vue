@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, onActivated, onDeactivated, ref } from "vue";
 import SavedScaleModels from "../components/SavedScaleModels.vue";
 import { frameHex } from "../utils/framePresentation";
 import {
@@ -245,15 +245,19 @@ async function refreshLogs() {
   }
 }
 
-onMounted(async () => {
-  await loadAll();
-  await refreshPreview();
+function resumePolling() {
+  if (timer !== undefined) return;
+  void loadAll();
   timer = window.setInterval(() => void loadAll(), 1500);
-});
-
-onUnmounted(() => {
-  if (timer) window.clearInterval(timer);
-});
+}
+function suspendPolling() {
+  if (timer !== undefined) window.clearInterval(timer);
+  timer = undefined;
+}
+onMounted(() => { resumePolling(); void refreshPreview(); });
+onActivated(resumePolling);
+onDeactivated(suspendPolling);
+onUnmounted(suspendPolling);
 </script>
 
 <template>
@@ -577,3 +581,347 @@ onUnmounted(() => {
     </section>
   </div>
 </template>
+
+<style scoped>
+
+.scale-simulator-page .scale-hero-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.scale-grid-main {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
+  gap: 1rem;
+  align-items: start;
+  margin-top: 1rem;
+}
+
+.scale-form-card {
+  min-width: 0;
+}
+
+.preset-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.preset-button {
+  text-align: left;
+  border: 1px solid var(--border-color, #d8dee8);
+  background: #fff;
+  border-radius: 12px;
+  padding: 0.75rem;
+  color: inherit;
+}
+
+.preset-button strong,
+.preset-button span {
+  display: block;
+}
+
+.preset-button span {
+  color: #667085;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  line-height: 1.25rem;
+}
+
+.form-grid.compact {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.8rem;
+}
+
+.form-grid.compact label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: #475467;
+}
+
+.form-grid.compact input,
+.form-grid.compact select {
+  width: 100%;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 0.62rem 0.7rem;
+  font: inherit;
+  background: #fff;
+  color: #101828;
+}
+
+.checkbox-line {
+  justify-content: center;
+  flex-direction: row !important;
+  align-items: center;
+}
+
+.checkbox-line input {
+  width: auto !important;
+}
+
+
+.serial-port-diagnostic {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  border: 1px solid #dbe7ff;
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: #f7fbff;
+  color: #344054;
+  font-size: 0.86rem;
+}
+
+.serial-port-diagnostic div {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.serial-port-diagnostic strong {
+  color: #1d2939;
+}
+
+.serial-port-diagnostic button {
+  justify-self: start;
+}
+
+.serial-warning {
+  color: #9a3412;
+}
+
+.frame-preview {
+  margin-top: 1rem;
+  border: 1px dashed #c6d0df;
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: #f8fafc;
+}
+
+.frame-preview span {
+  display: block;
+  color: #667085;
+  font-size: 0.78rem;
+  margin-bottom: 0.35rem;
+}
+
+.frame-preview code,
+.scale-details-grid code {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.scale-active-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.scale-active-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  border-radius: 14px;
+  padding: 0.8rem;
+  text-align: left;
+  color: inherit;
+}
+
+.scale-active-item.selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
+}
+
+.scale-active-item strong,
+.scale-active-item span,
+.scale-active-weight small {
+  display: block;
+}
+
+.scale-active-item span,
+.scale-active-weight small {
+  color: #667085;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.scale-active-weight {
+  text-align: right;
+  font-weight: 800;
+  color: #101828;
+  min-width: 120px;
+}
+
+.scale-control-panel {
+  margin-top: 1rem;
+  border-top: 1px solid #eef2f6;
+  padding-top: 1rem;
+}
+
+.scale-display {
+  background: #101828;
+  color: #ecfdf3;
+  border-radius: 18px;
+  padding: 1rem;
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.scale-display span,
+.scale-display em {
+  display: block;
+  color: #98a2b3;
+  font-style: normal;
+  font-size: 0.75rem;
+}
+
+.scale-display strong {
+  display: block;
+  font-size: clamp(2.4rem, 6vw, 4.4rem);
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.scale-control-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.scale-control-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: #475467;
+}
+
+.scale-control-grid input {
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 0.62rem 0.7rem;
+}
+
+.scale-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.6rem;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 0.8rem;
+  margin: 1rem 0;
+  color: #475467;
+  font-size: 0.85rem;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.empty-state-inline {
+  border: 1px dashed #d0d5dd;
+  border-radius: 12px;
+  padding: 1rem;
+  color: #667085;
+  background: #f8fafc;
+}
+
+.scale-log-list {
+  display: grid;
+  gap: 0.45rem;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.scale-log-row {
+  display: grid;
+  grid-template-columns: 170px 70px 1fr;
+  gap: 0.7rem;
+  align-items: start;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.scale-log-row span {
+  color: #667085;
+}
+
+.scale-log-row p {
+  margin: 0;
+}
+
+.scale-log-row.error strong {
+  color: #b42318;
+}
+
+.scale-log-row.warn strong {
+  color: #b54708;
+}
+
+.scale-log-row.info strong {
+  color: #175cd3;
+}
+
+button.danger {
+  background: #b42318;
+  color: #fff;
+  border-color: #b42318;
+}
+
+@media (max-width: 980px) {
+  .scale-grid-main {
+    grid-template-columns: 1fr;
+  }
+
+  .scale-log-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Scale Simulator: focused, light-first product shell. */
+.scale-overview { display: grid; gap: 20px; }
+.scale-overview .dashboard-hero { padding: 30px; gap: 28px; }
+.scale-overview .dashboard-hero h2 { font-size: clamp(25px, 2.3vw, 36px); margin: 8px 0 12px; letter-spacing: -.035em; }
+.scale-overview .dashboard-hero p { max-width: 650px; line-height: 1.6; }
+.scale-overview .dashboard-hero .link-button { display: inline-flex; margin-top: 12px; }
+.scale-hero-display { background: #103b4a; color: #baf7e4; min-width: 250px; padding: 20px 24px; border-radius: 16px; box-shadow: inset 0 0 0 5px #1b5060; display: grid; gap: 14px; }
+.scale-hero-display > span { font-size: 10px; letter-spacing: .16em; }
+.scale-hero-display strong { font: 600 39px ui-monospace, monospace; white-space: nowrap; }
+.scale-hero-display small { font-size: 16px; }
+.scale-overview-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.scale-overview-heading h3 { margin: 0 0 6px; }
+.scale-overview-heading p { margin: 0; }
+.scale-empty { padding: 42px 16px; text-align: center; color: var(--text-muted); }
+.scale-empty strong { color: var(--text-color); font-size: 17px; }
+.scale-help-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.scale-help-grid a { color: var(--text-color); text-decoration: none; }
+.scale-help-grid h3 { margin: 0 0 10px; }
+.scale-help-grid p { margin: 0; color: var(--text-muted); line-height: 1.6; }
+.scale-overview .section-card { padding: 22px; }
+.scale-overview .table-scroll { overflow-x: auto; margin-top: 20px; }
+@media (max-width: 900px) { .scale-hero-display { display: none; } .scale-help-grid { grid-template-columns: 1fr; } }
+
+.frame-overrides { margin-top: 16px; }
+.frame-overrides summary { cursor: pointer; font-weight: 700; }
+.frame-overrides .scale-form-grid { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.frame-overrides label { display: grid; gap: 8px; }
+.frame-overrides small { color: var(--text-muted); }
+
+.frame-hex { display: block; overflow-wrap: anywhere; white-space: pre-wrap; margin-top: 6px; }
+
+</style>

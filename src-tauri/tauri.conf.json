@@ -1,12 +1,15 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Scale Simulator",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "identifier": "br.com.wkarts.scale-simulator-tauri",
   "build": {
     "beforeDevCommand": "npm run dev:tauri",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build:web",
+    "beforeBuildCommand": "npm run build:web:tauri",
+    "features": [
+      "desktop"
+    ],
     "frontendDist": "../dist"
   },
   "app": {
@@ -47,8 +50,8 @@
         "minimumWebview2Version": "110.0.1531.0"
       }
     },
-    "publisher": "WK Arts",
-    "shortDescription": "Simulador de balanças TCP e RS232",
-    "longDescription": "Laboratório de pesagem com múltiplas instâncias e nove modelos de indicadores para testar integrações."
+    "resources": [
+      "dist/**/*"
+    ]
   }
 }

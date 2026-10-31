@@ -1,7 +1,9 @@
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 use crate::{app_state::SharedState, db::open_connection};
 use super::scale_simulator::{scale_simulator_preview_frame, ScaleSimulatorConfig};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 use tauri::State;
 
 #[derive(Serialize, Deserialize)]
@@ -11,11 +13,11 @@ pub struct SavedScaleModel {
     config: ScaleSimulatorConfig,
     revision: i64,
 }
-fn schema(db: &Connection) -> Result<(), String> {
+pub(crate) fn schema(db: &Connection) -> Result<(), String> {
     db.execute_batch("CREATE TABLE IF NOT EXISTS scale_simulation_templates (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, config_json TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1);")
         .map_err(|e| format!("Não foi possível abrir os modelos: {e}"))
 }
-fn list(db: &Connection) -> Result<Vec<SavedScaleModel>, String> {
+pub(crate) fn list(db: &Connection) -> Result<Vec<SavedScaleModel>, String> {
     schema(db)?;
     let mut statement = db.prepare("SELECT id,name,config_json,revision FROM scale_simulation_templates ORDER BY name COLLATE NOCASE,id").map_err(|e| e.to_string())?;
     let rows = statement
@@ -42,7 +44,7 @@ fn list(db: &Connection) -> Result<Vec<SavedScaleModel>, String> {
     })
     .collect()
 }
-fn save(
+pub(crate) fn save(
     db: &Connection,
     id: Option<String>,
     name: String,
@@ -88,10 +90,12 @@ fn save(
         )),
     }
 }
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn scale_models_list(state: State<SharedState>) -> Result<Vec<SavedScaleModel>, String> {
     list(&open_connection(&state.db_path()?)?)
 }
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn scale_model_save(
     state: State<SharedState>,
@@ -108,6 +112,7 @@ pub fn scale_model_save(
         expected_revision,
     )
 }
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn scale_model_delete(
     state: State<SharedState>,

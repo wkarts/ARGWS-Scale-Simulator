@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import AppModal from "../components/AppModal.vue";
+import BasePage from "../components/base/BasePage.vue";
 import AppSwitch from "../components/AppSwitch.vue";
 import { entityConfigs, type EntityField } from "../config/entities";
 import { comboList, deleteEntity, listEntity, saveEntity, type ComboOption } from "../services/crud";
 import { booleanLabel } from "../services/format";
+import { appConfirm } from "../services/dialog";
 
 const props = defineProps<{
   entityKey: string;
@@ -139,7 +141,7 @@ async function persist() {
 }
 
 async function removeRow(id: number) {
-  if (!confirm("Deseja remover este registro?")) return;
+  if (!(await appConfirm({ title: "Remover registro", message: "Deseja remover este registro?", danger: true, confirmText: "Remover" }))) return;
   try {
     await deleteEntity(config.value.key, id);
     await load();
@@ -170,19 +172,12 @@ watch(
 </script>
 
 <template>
-  <div class="grid page-gap">
-    <div class="toolbar">
-      <div>
-        <h2 style="margin: 0;">{{ config.title }}</h2>
-        <div class="muted">Cadastro local padronizado com edição e inclusão em modal.</div>
-      </div>
-
-      <div class="actions">
-        <input v-model="search" placeholder="Pesquisar..." @keyup.enter="load" />
-        <button class="secondary" @click="load">Buscar</button>
-        <button class="secondary" @click="openNewModal">Novo</button>
-      </div>
-    </div>
+  <BasePage :title="config.title" subtitle="Cadastro local padronizado com edição e inclusão em modal.">
+    <template #actions>
+      <input v-model="search" class="titlebar-search" placeholder="Pesquisar..." @keyup.enter="load" />
+      <button class="secondary" @click="load">Buscar</button>
+      <button class="primary" @click="openNewModal">Novo</button>
+    </template>
 
     <div v-if="error" class="alert error">{{ error }}</div>
 
@@ -288,5 +283,5 @@ watch(
         </div>
       </form>
     </AppModal>
-  </div>
+  </BasePage>
 </template>

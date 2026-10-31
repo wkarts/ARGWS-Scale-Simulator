@@ -12,7 +12,7 @@ onMounted(load);
 </script>
 
 <template>
-  <BasePage title="Banco de dados" subtitle="Status e configuração de banco, mantendo SQLite como padrão local.">
+  <BasePage title="Banco de dados" subtitle="Status e configuração de banco, mantendo SQLite como padrão do template.">
     <template #actions><button class="secondary" @click="load">Testar/atualizar</button></template>
     <div v-if="error" class="alert error">{{ error }}</div>
     <BaseSectionCard title="Conexão atual">

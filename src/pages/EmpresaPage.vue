@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
 import AppModal from "../components/AppModal.vue";
+import BasePage from "../components/base/BasePage.vue";
 import AppSwitch from "../components/AppSwitch.vue";
 import {
   deleteCompany,
@@ -13,6 +14,7 @@ import {
 } from "../services/crud";
 import { booleanLabel, formatCpfCnpj, formatPhone } from "../services/format";
 import { showSplashError, showSplashInfo, showSplashSuccess, showSplashWarning } from "../services/splash";
+import { appConfirm } from "../services/dialog";
 
 const rows = ref<GenericRecord[]>([]);
 const loading = ref(false);
@@ -188,7 +190,7 @@ async function persist() {
 }
 
 async function removeRow(id: number) {
-  if (!confirm("Deseja excluir esta empresa usuária?")) return;
+  if (!(await appConfirm({ title: "Excluir empresa", message: "Deseja excluir esta empresa usuária?", danger: true, confirmText: "Excluir" }))) return;
 
   try {
     await deleteCompany(id);
@@ -207,15 +209,10 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="grid page-gap">
-    <div class="toolbar">
-      <div>
-        <h2>Cadastro de empresa usuária</h2>
-      </div>
-      <div class="actions">
-        <button class="secondary" @click="openNewModal">Novo cadastro</button>
-      </div>
-    </div>
+  <BasePage title="Cadastro de empresa usuária" subtitle="Gestão de empresas, identificação fiscal, contato e endereço." icon="building">
+    <template #actions>
+      <button class="primary" @click="openNewModal">Novo cadastro</button>
+    </template>
 
     <div v-if="error" class="alert error">{{ error }}</div>
 
@@ -396,5 +393,5 @@ onMounted(load);
         </div>
       </div>
     </AppModal>
-  </div>
+  </BasePage>
 </template>

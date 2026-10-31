@@ -16,63 +16,19 @@ function clone<T>(value: T): T {
 }
 
 function initialDatabase(): WebLocalDatabaseShape {
-  const adminUser = {
-    id: 1,
-    nome: "Administrador",
-    login: "admin",
-    email: "admin@local.test",
-    telefone: null,
-    cargo: "Administrador",
-    administrador: true,
-    master_user: true,
-    senha_provisoria: false,
-    ativo: true,
-    senha: "admin123",
-    permission_keys: ["*"],
-    profile_names: ["Administrador"],
-    company_ids: [1],
-    company_names: ["Empresa Demonstração"],
-    created_at: nowIso(),
-    updated_at: nowIso(),
-  };
-
   return {
     counters: {
-      companies: 1,
-      users: 1,
-      profiles: 1,
+      companies: 0,
+      users: 0,
+      profiles: 0,
       app_logs: 0,
       sync_queue: 0,
       integrations: 0,
     },
     tables: {
-      companies: [
-        {
-          id: 1,
-          nome: "Empresa Demonstração",
-          razao_social: "Empresa Demonstração LTDA",
-          documento: "00.000.000/0001-00",
-          telefone: "(00) 00000-0000",
-          email: "contato@local.test",
-          cidade: "Demonstração",
-          estado: "BA",
-          ativo: true,
-          created_at: nowIso(),
-          updated_at: nowIso(),
-        },
-      ],
-      users: [adminUser],
-      profiles: [
-        {
-          id: 1,
-          nome: "Administrador",
-          descricao: "Perfil administrativo local para modo Web/PWA.",
-          ativo: true,
-          permission_keys: ["*"],
-          created_at: nowIso(),
-          updated_at: nowIso(),
-        },
-      ],
+      companies: [],
+      users: [],
+      profiles: [],
       app_logs: [],
       sync_queue: [],
       integrations: [],

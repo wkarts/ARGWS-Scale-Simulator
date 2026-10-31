@@ -16,14 +16,14 @@ Usa `sc.exe`.
 Variável opcional:
 
 ```bash
-TEMPLATE_APP_SERVICE_NAME=TemplateAppServer
+SCALE_SIMULATOR_SERVICE_NAME=ScaleSimulatorServer
 ```
 
 ## Linux
 
 Usa `systemd` e requer permissão administrativa para instalar/remover unit.
 
-- `app_service_install`: grava `/etc/systemd/system/template-app-server.service`, executa daemon-reload e enable.
+- `app_service_install`: grava `/etc/systemd/system/scale-simulator-server.service`, executa daemon-reload e enable.
 - `app_service_uninstall`: disable, remove unit e daemon-reload.
 - `app_service_start`: start.
 - `app_service_stop`: stop.

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-defineProps<{ actions: { title: string; route?: string; disabled?: boolean }[] }>();
+import IconSymbol from "../base/IconSymbol.vue";
+
+defineProps<{ actions: { title: string; route?: string; icon?: string; disabled?: boolean }[] }>();
 </script>
 
 <template>
@@ -7,7 +9,8 @@ defineProps<{ actions: { title: string; route?: string; disabled?: boolean }[] }
     <header class="section-card-header"><h3>Atalhos rápidos</h3></header>
     <div class="quick-actions-grid">
       <RouterLink v-for="action in actions" :key="action.title" :to="action.route || '/'" class="quick-action" :class="{ disabled: action.disabled }">
-        {{ action.title }}
+        <span class="quick-action-icon"><IconSymbol :name="action.icon || 'circle'" :size="20" /></span>
+        <strong>{{ action.title }}</strong>
       </RouterLink>
     </div>
   </section>

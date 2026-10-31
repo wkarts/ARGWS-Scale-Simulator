@@ -2,7 +2,7 @@ use chrono::Utc;
 use rusqlite::{params, OptionalExtension};
 use std::path::Path;
 
-use crate::{db::open_connection, security::hash_password};
+use crate::{bootstrap, db::open_connection, security::hash_password};
 
 const BOOTSTRAP_SEED_KEY: &str = "bootstrap_seed_version";
 const BOOTSTRAP_SEED_STATUS_KEY: &str = "bootstrap_seed_status";
@@ -50,6 +50,10 @@ pub fn migrate(db_path: &Path) -> Result<(), String> {
             master_user INTEGER NOT NULL DEFAULT 0,
             administrador INTEGER NOT NULL DEFAULT 0,
             senha_provisoria INTEGER NOT NULL DEFAULT 0,
+            api_access_enabled INTEGER NOT NULL DEFAULT 0,
+            mobile_access_enabled INTEGER NOT NULL DEFAULT 1,
+            api_session_timeout_minutes INTEGER NOT NULL DEFAULT 720,
+            local_guest INTEGER NOT NULL DEFAULT 0,
             ultimo_login_em TEXT,
             ativo INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
@@ -99,6 +103,7 @@ pub fn migrate(db_path: &Path) -> Result<(), String> {
             created_at TEXT NOT NULL,
             expires_at TEXT NOT NULL,
             last_activity_at TEXT NOT NULL,
+            channel TEXT NOT NULL DEFAULT 'desktop',
             FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
         );
 
@@ -311,28 +316,64 @@ pub fn migrate(db_path: &Path) -> Result<(), String> {
     migrate_existing_schema(&conn)?;
     ensure_optional_columns(&conn)?;
     ensure_indexes(&conn)?;
-    seed_data(&conn)
+    seed_data(&conn, db_path)
 }
 
 fn migrate_existing_schema(conn: &rusqlite::Connection) -> Result<(), String> {
     for (table, column, definition) in [
         ("empresas", "nome_fantasia", "TEXT"),
+        ("empresas", "documento", "TEXT"),
         ("empresas", "inscricao_estadual", "TEXT"),
         ("empresas", "inscricao_municipal", "TEXT"),
+        ("empresas", "telefone", "TEXT"),
+        ("empresas", "email", "TEXT"),
         ("empresas", "responsavel_nome", "TEXT"),
         ("empresas", "responsavel_telefone", "TEXT"),
         ("empresas", "cep", "TEXT"),
+        ("empresas", "endereco", "TEXT"),
         ("empresas", "numero", "TEXT"),
         ("empresas", "complemento", "TEXT"),
+        ("empresas", "bairro", "TEXT"),
+        ("empresas", "cidade", "TEXT"),
+        ("empresas", "estado", "TEXT"),
         ("empresas", "observacoes", "TEXT"),
+        ("empresas", "ativo", "INTEGER NOT NULL DEFAULT 1"),
+        ("empresas", "created_at", "TEXT NOT NULL DEFAULT ''"),
+        ("empresas", "updated_at", "TEXT NOT NULL DEFAULT ''"),
+        ("usuarios", "nome", "TEXT NOT NULL DEFAULT ''"),
         ("usuarios", "email", "TEXT"),
         ("usuarios", "telefone", "TEXT"),
         ("usuarios", "cargo", "TEXT"),
         ("usuarios", "observacoes", "TEXT"),
         ("usuarios", "photo_url", "TEXT"),
         ("usuarios", "master_user", "INTEGER NOT NULL DEFAULT 0"),
+        ("usuarios", "administrador", "INTEGER NOT NULL DEFAULT 0"),
         ("usuarios", "senha_provisoria", "INTEGER NOT NULL DEFAULT 0"),
+        (
+            "usuarios",
+            "api_access_enabled",
+            "INTEGER NOT NULL DEFAULT 0",
+        ),
+        (
+            "usuarios",
+            "mobile_access_enabled",
+            "INTEGER NOT NULL DEFAULT 1",
+        ),
+        (
+            "usuarios",
+            "api_session_timeout_minutes",
+            "INTEGER NOT NULL DEFAULT 720",
+        ),
+        ("usuarios", "local_guest", "INTEGER NOT NULL DEFAULT 0"),
         ("usuarios", "ultimo_login_em", "TEXT"),
+        ("usuarios", "ativo", "INTEGER NOT NULL DEFAULT 1"),
+        ("usuarios", "created_at", "TEXT NOT NULL DEFAULT ''"),
+        ("usuarios", "updated_at", "TEXT NOT NULL DEFAULT ''"),
+        (
+            "user_sessions",
+            "channel",
+            "TEXT NOT NULL DEFAULT 'desktop'",
+        ),
     ] {
         add_column_if_missing(conn, table, column, definition)?;
     }
@@ -347,8 +388,15 @@ fn migrate_existing_schema(conn: &rusqlite::Connection) -> Result<(), String> {
            SET responsavel_telefone = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(responsavel_telefone, ''), '(', ''), ')', ''), '-', ''), ' ', ''), '.', '');
         UPDATE empresas
            SET cep = REPLACE(REPLACE(REPLACE(COALESCE(cep, ''), '.', ''), '-', ''), ' ', '');
+        UPDATE empresas
+           SET created_at = CASE WHEN TRIM(COALESCE(created_at, '')) = '' THEN datetime('now') ELSE created_at END,
+               updated_at = CASE WHEN TRIM(COALESCE(updated_at, '')) = '' THEN datetime('now') ELSE updated_at END;
         UPDATE usuarios
            SET login = LOWER(TRIM(COALESCE(login, '')));
+        UPDATE usuarios
+           SET nome = COALESCE(NULLIF(TRIM(nome), ''), NULLIF(login, ''), 'Usuário'),
+               created_at = CASE WHEN TRIM(COALESCE(created_at, '')) = '' THEN datetime('now') ELSE created_at END,
+               updated_at = CASE WHEN TRIM(COALESCE(updated_at, '')) = '' THEN datetime('now') ELSE updated_at END;
         UPDATE usuarios
            SET telefone = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(telefone, ''), '(', ''), ')', ''), '-', ''), ' ', ''), '.', '');
         "#,
@@ -419,11 +467,11 @@ fn ensure_indexes(conn: &rusqlite::Connection) -> Result<(), String> {
     Ok(())
 }
 
-fn seed_data(conn: &rusqlite::Connection) -> Result<(), String> {
+fn seed_data(conn: &rusqlite::Connection, db_path: &Path) -> Result<(), String> {
     let now = Utc::now().to_rfc3339();
 
     ensure_company_seed(conn, &now)?;
-    ensure_access_seed(conn, &now)?;
+    ensure_access_seed(conn, db_path, &now)?;
     ensure_simple_seed(conn, "departamentos", "descricao", "Administrativo", &now)?;
     ensure_simple_seed(conn, "funcoes", "descricao", "Administrador", &now)?;
     ensure_center_cost_seed(conn, &now)?;
@@ -450,34 +498,90 @@ fn ensure_company_seed(conn: &rusqlite::Connection, now: &str) -> Result<(), Str
     Ok(())
 }
 
-fn ensure_access_seed(conn: &rusqlite::Connection, now: &str) -> Result<(), String> {
-    let admin_id: i64 = match conn
+fn ensure_access_seed(
+    conn: &rusqlite::Connection,
+    db_path: &Path,
+    now: &str,
+) -> Result<(), String> {
+    let existing_master = conn
         .query_row(
-            "SELECT id FROM usuarios WHERE login = 'admin' LIMIT 1",
+            "SELECT id FROM usuarios WHERE master_user = 1 ORDER BY id ASC LIMIT 1",
             [],
-            |row| row.get(0),
+            |row| row.get::<_, i64>(0),
         )
         .optional()
-        .map_err(|err| format!("Falha ao verificar usuário admin: {err}"))?
-    {
-        Some(id) => id,
-        None => {
-            let password_hash = hash_password("admin123")?;
-            conn.execute(
-                "INSERT INTO usuarios (nome, login, email, senha_hash, master_user, administrador, senha_provisoria, ativo, created_at, updated_at)
-                 VALUES ('Administrador', 'admin', 'admin@local', ?1, 1, 1, 1, 1, ?2, ?2)",
-                params![password_hash, now],
-            )
-            .map_err(|err| format!("Falha ao criar usuário admin: {err}"))?;
-            conn.last_insert_rowid()
-        }
+        .map_err(|err| format!("Falha ao verificar usuário master: {err}"))?;
+    let legacy_admin = if existing_master.is_none() {
+        conn.query_row(
+            "SELECT id
+             FROM usuarios
+             WHERE COALESCE(local_guest, 0) = 0
+               AND (LOWER(login) = 'admin' OR administrador = 1)
+             ORDER BY CASE WHEN LOWER(login) = 'admin' THEN 0 ELSE 1 END, id ASC
+             LIMIT 1",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|err| format!("Falha ao localizar administrador legado: {err}"))?
+    } else {
+        None
+    };
+
+    let admin_id = if let Some(id) = existing_master.or(legacy_admin) {
+        id
+    } else {
+        let credential = bootstrap::resolve_internal()?;
+        let password_hash = hash_password(&credential.password)?;
+        let provisional_password = if credential.configured_by_environment {
+            0
+        } else {
+            1
+        };
+        conn.execute(
+            "INSERT INTO usuarios (
+                nome, login, email, senha_hash, master_user, administrador,
+                senha_provisoria, api_access_enabled, mobile_access_enabled,
+                api_session_timeout_minutes, local_guest, ativo, created_at, updated_at
+             ) VALUES ('Administrador', ?1, 'admin@local', ?2, 1, 1, ?3, 1, 1, 720, 0, 1, ?4, ?4)",
+            params![
+                credential.username,
+                password_hash,
+                provisional_password,
+                now
+            ],
+        )
+        .map_err(|err| format!("Falha ao criar usuário master: {err}"))?;
+        conn.last_insert_rowid()
     };
 
     conn.execute(
-        "UPDATE usuarios SET master_user = 1, administrador = 1, ativo = 1, updated_at = ?1 WHERE id = ?2",
+        "UPDATE usuarios
+         SET master_user = 1, administrador = 1, api_access_enabled = 1,
+             mobile_access_enabled = 1, local_guest = 0, ativo = 1, updated_at = ?1
+         WHERE id = ?2",
         params![now, admin_id],
     )
     .map_err(|err| format!("Falha ao atualizar usuário admin: {err}"))?;
+
+    let master_is_provisional = conn
+        .query_row(
+            "SELECT senha_provisoria FROM usuarios WHERE id = ?1 LIMIT 1",
+            [admin_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|err| format!("Falha ao consultar estado da senha master: {err}"))?
+        == 1;
+    if master_is_provisional && bootstrap::environment_password_configured() {
+        let credential = bootstrap::resolve_internal()?;
+        conn.execute(
+            "UPDATE usuarios
+             SET senha_hash = ?1, senha_provisoria = 0, updated_at = ?2
+             WHERE id = ?3",
+            params![hash_password(&credential.password)?, now, admin_id],
+        )
+        .map_err(|err| format!("Falha ao aplicar credencial master do ambiente: {err}"))?;
+    }
 
     let perfil_master_id: i64 = match conn
         .query_row(
@@ -543,6 +647,46 @@ fn ensure_access_seed(conn: &rusqlite::Connection, now: &str) -> Result<(), Stri
         .map_err(|err| format!("Falha ao vincular empresa ao usuário admin: {err}"))?;
     }
 
+    #[cfg(feature = "mobile")]
+    ensure_mobile_guest_seed(conn, now)?;
+    let _ = bootstrap::remove_legacy_file(db_path);
+    Ok(())
+}
+
+#[cfg(feature = "mobile")]
+fn ensure_mobile_guest_seed(conn: &rusqlite::Connection, now: &str) -> Result<(), String> {
+    let guest_id = match conn
+        .query_row(
+            "SELECT id FROM usuarios WHERE local_guest = 1 LIMIT 1",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|err| format!("Falha ao verificar usuário local mobile: {err}"))?
+    {
+        Some(id) => id,
+        None => {
+            let internal_secret = format!("{:032x}", rand::random::<u128>());
+            let password_hash = hash_password(&internal_secret)?;
+            conn.execute(
+                "INSERT INTO usuarios (
+                    nome, login, senha_hash, master_user, administrador, senha_provisoria,
+                    api_access_enabled, mobile_access_enabled, api_session_timeout_minutes,
+                    local_guest, ativo, created_at, updated_at
+                 ) VALUES ('Usuário local', '__mobile_local__', ?1, 0, 0, 0, 0, 1, 1440, 1, 1, ?2, ?2)",
+                params![password_hash, now],
+            )
+            .map_err(|err| format!("Falha ao criar usuário local mobile: {err}"))?;
+            conn.last_insert_rowid()
+        }
+    };
+
+    conn.execute(
+        "UPDATE usuarios SET mobile_access_enabled = 1, api_access_enabled = 0, ativo = 1, updated_at = ?1 WHERE id = ?2",
+        params![now, guest_id],
+    )
+    .map_err(|err| format!("Falha ao atualizar usuário local mobile: {err}"))?;
+
     Ok(())
 }
 
@@ -565,6 +709,8 @@ fn access_permission_keys() -> Vec<&'static str> {
         "logs:manage",
         "sync:view",
         "relatorios:export",
+        "api:access",
+        "mobile:access",
     ]
 }
 
@@ -615,24 +761,32 @@ fn ensure_center_cost_seed(conn: &rusqlite::Connection, now: &str) -> Result<(),
 fn ensure_app_settings(conn: &rusqlite::Connection, now: &str) -> Result<(), String> {
     let settings = [
         (BOOTSTRAP_SEED_KEY, BOOTSTRAP_SEED_VERSION.to_string()),
-        (BOOTSTRAP_SEED_STATUS_KEY, "ok".to_string()),
+        (BOOTSTRAP_SEED_STATUS_KEY, "applied".to_string()),
         (
             "app_template_version",
             env!("CARGO_PKG_VERSION").to_string(),
         ),
         ("runtime_license_mode", "local".to_string()),
         ("login_session_days", "7".to_string()),
+        ("user_login_min_length", "2".to_string()),
+        ("mobile_guest_access_enabled", "true".to_string()),
+        (
+            "security.password_policy",
+            serde_json::to_string(&crate::security::PasswordPolicy::default())
+                .map_err(|err| format!("Falha ao serializar política de senha inicial: {err}"))?,
+        ),
     ];
 
     for (key, value) in settings {
         conn.execute(
-            "INSERT OR REPLACE INTO app_settings (chave, valor, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)",
+            "INSERT OR IGNORE INTO app_settings (chave, valor, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)",
             params![key, value, now],
         )
         .map_err(|err| format!("Falha ao gravar configuração {key}: {err}"))?;
 
         conn.execute(
-            "INSERT OR REPLACE INTO configuracoes (nome, valor, updated_at) VALUES (?1, ?2, ?3)",
+            "INSERT INTO configuracoes (nome, valor, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(nome) DO NOTHING",
             params![key, value, now],
         )
         .map_err(|err| format!("Falha ao gravar parâmetro {key}: {err}"))?;

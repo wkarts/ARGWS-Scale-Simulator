@@ -9,17 +9,19 @@ use super::args::{CliArgs, RuntimeMode};
 pub fn should_run_without_tauri(args: &CliArgs) -> bool {
     matches!(
         args.mode,
-        RuntimeMode::HeadlessApi | RuntimeMode::Cli | RuntimeMode::Worker
+        RuntimeMode::HeadlessApi | RuntimeMode::WebProxy | RuntimeMode::Cli | RuntimeMode::Worker
     )
 }
 
 pub fn run(args: CliArgs) -> Result<(), String> {
+    let _ = crate::runtime_config::init_env_file(None);
     let state = SharedState::new();
     if let Some(data_dir) = args.data_dir.clone() {
         state.init_with_data_dir(data_dir)?;
     } else {
         state.init()?;
     }
+    let _ = crate::runtime_config::init_env_file(Some(&state));
 
     let db_config = DatabaseConfig::from_env_with_driver(&args.database_driver);
     let sqlite_path = state.db_path()?;
@@ -28,7 +30,8 @@ pub fn run(args: CliArgs) -> Result<(), String> {
     }
 
     match args.mode {
-        RuntimeMode::HeadlessApi => {
+        RuntimeMode::HeadlessApi | RuntimeMode::WebProxy => {
+            start_requested_background_services(&state, &args)?;
             let config = internal_api::config::InternalApiConfig::default()
                 .with_host_port(args.host.clone(), args.port);
             internal_api::server::run_blocking_with_config(&state, config)
@@ -36,7 +39,7 @@ pub fn run(args: CliArgs) -> Result<(), String> {
         RuntimeMode::Cli => {
             let db_path = state.db_path()?;
             let data_dir = state.data_dir()?;
-            println!("Template App CLI");
+            println!("Scale Simulator CLI");
             println!("Versão: {}", env!("CARGO_PKG_VERSION"));
             let health = health::report(&db_config, &db_path);
             println!("Banco SQLite local: {}", db_path.display());
@@ -52,4 +55,60 @@ pub fn run(args: CliArgs) -> Result<(), String> {
         }
         RuntimeMode::Desktop => Ok(()),
     }
+}
+
+fn start_requested_background_services(state: &SharedState, args: &CliArgs) -> Result<(), String> {
+    let settings = crate::runtime_config::load_settings(state)
+        .map(|payload| payload.settings)
+        .unwrap_or_default();
+
+    let web_enabled = settings.local_web_enabled
+        && !env_bool("SCALE_SIMULATOR_WEB_DISABLED", false)
+        && !env_bool("APP_WEB_DISABLED", false);
+    if web_enabled && (args.start_web_proxy || args.start_services || settings.local_web_auto_start)
+    {
+        crate::internal_api::web_server::start_background(state.clone())?;
+    }
+
+    let webhook_enabled = settings.webhook_enabled
+        && !env_bool("SCALE_SIMULATOR_WEBHOOK_DISABLED", false)
+        && !env_bool("APP_WEBHOOK_DISABLED", false);
+    if webhook_enabled
+        && (args.start_webhook
+            || args.start_services
+            || settings.services_auto_start
+            || settings.webhook_auto_start
+            || env_bool("SCALE_SIMULATOR_WEBHOOK_AUTO_START", false)
+            || env_bool("SCALE_SIMULATOR_SERVICES_AUTO_START", false))
+    {
+        crate::native_webhook::server::start_background(state.clone())?;
+    }
+
+    let websocket_enabled = settings.websocket_enabled
+        && !env_bool("SCALE_SIMULATOR_WEBSOCKET_DISABLED", false)
+        && !env_bool("APP_WEBSOCKET_DISABLED", false);
+    if websocket_enabled
+        && (args.start_websocket
+            || args.start_services
+            || settings.services_auto_start
+            || settings.websocket_auto_start
+            || env_bool("SCALE_SIMULATOR_WEBSOCKET_AUTO_START", false)
+            || env_bool("SCALE_SIMULATOR_SERVICES_AUTO_START", false))
+    {
+        crate::native_websocket::server::start_background(state.clone())?;
+    }
+
+    Ok(())
+}
+
+fn env_bool(key: &str, default: bool) -> bool {
+    std::env::var(key)
+        .ok()
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(default)
 }

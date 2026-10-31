@@ -19,6 +19,7 @@ const config = {
         'package.json',
         'package-lock.json',
         'src-tauri/Cargo.toml',
+        'src-tauri/Cargo.lock',
         'src-tauri/tauri.conf.json',
         'src/config/projectConfig.ts',
         'CHANGELOG.md'

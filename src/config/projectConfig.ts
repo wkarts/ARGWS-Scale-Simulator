@@ -3,6 +3,7 @@ export type SidebarDefaultState = "expanded" | "collapsed";
 export type MenuBehavior = "single-open" | "multi-open" | "free";
 export type SubmenuVisualMode = "default" | "tree" | "compact" | "indented";
 export type DatabaseDriver = "sqlite" | "mysql" | "postgres";
+export type WorkspaceTabsMode = "enabled" | "disabled";
 
 export const projectConfig = {
   app: {
@@ -11,8 +12,8 @@ export const projectConfig = {
     productName: "Scale Simulator",
     windowTitle: "Scale Simulator",
     subtitle: "Laboratório de pesagem • TCP / RS232",
-    description: "Simulação de balanças e indicadores para testar integrações TCP e RS232.",
-    version: "0.2.0",
+    description: "Simulador de balanças TCP e RS232 com modelos salvos e Playground.",
+    version: "0.3.0",
     mode: "desktop" as RuntimeMode,
     identifier: "br.com.wkarts.scale-simulator-tauri",
     developer: "Wallace Kleiton",
@@ -22,7 +23,7 @@ export const projectConfig = {
     documentationUrl: "",
   },
   features: {
-    licensing: true,
+    licensing: false,
     about: true,
     userGuide: true,
     logs: true,
@@ -32,6 +33,8 @@ export const projectConfig = {
     sync: true,
     internalApi: true,
     scalarDocs: true,
+    webhookService: true,
+    websocketService: true,
     databaseSettings: true,
     integrations: true,
     tray: true,
@@ -44,14 +47,15 @@ export const projectConfig = {
   defaultAdmin: {
     enabled: true,
     username: "admin",
-    password: "", // No credential is embedded in frontend metadata.
+    bootstrapStrategy: "internal" as const,
+    bootstrapPasswordEnv: "SCALE_SIMULATOR_BOOTSTRAP_ADMIN_PASSWORD",
     forcePasswordChangeOnFirstLogin: true,
   },
   database: {
     driver: "sqlite" as DatabaseDriver,
-    sqlite: { path: "app.db" },
-    mysql: { host: "127.0.0.1", port: 3306, database: "template_app", username: "root", password: "" },
-    postgres: { host: "127.0.0.1", port: 5432, database: "template_app", username: "postgres", password: "" },
+    sqlite: { path: "scale-simulator.db" },
+    mysql: { host: "127.0.0.1", port: 3306, database: "scale_simulator", username: "root", password: "" },
+    postgres: { host: "127.0.0.1", port: 5432, database: "scale_simulator", username: "postgres", password: "" },
     firebird: {
       supported: false,
       scope: "out-of-scope",
@@ -69,10 +73,10 @@ export const projectConfig = {
       systemHealth: true,
       userStats: true,
       companyStats: true,
-      licensingStatus: true,
+      licensingStatus: false,
       internalApiStatus: true,
       integrationStatus: true,
-      syncStatus: false,
+      syncStatus: true,
       financialSummary: false,
       customBusinessCards: false,
     },
@@ -112,6 +116,46 @@ export const projectConfig = {
     showSubmenuTreeLine: true,
     submenuVisualMode: "tree" as SubmenuVisualMode,
   },
+  workspace: {
+    tabsMode: "enabled" as WorkspaceTabsMode,
+    persistTabs: true,
+    maxTabs: 12,
+    mobileTabs: false,
+    mobileBreakpoint: 1180,
+  },
+  mobile: {
+    enabled: true,
+    frontend: "local-bundled" as const,
+    localDatabase: "sqlite" as const,
+    defaultMode: "unconfigured" as "unconfigured" | "local" | "remote",
+    localAuthenticationOptional: true,
+    localAuthenticationRequiredByDefault: false,
+    standaloneSupported: true,
+    restClientSupported: true,
+    remoteWebView: false,
+    remoteApiUserScope: true,
+    remoteApiCompanyScope: true,
+    synchronization: "product-defined" as const,
+  },
+  services: {
+    webhook: {
+      enabled: false,
+      host: "0.0.0.0",
+      port: 61003,
+      basePath: "/webhooks",
+      tokenRequired: true,
+      tokenHeader: "X-Webhook-Token",
+    },
+    websocket: {
+      enabled: false,
+      host: "0.0.0.0",
+      port: 61004,
+      path: "/ws",
+      tokenRequired: true,
+      tokenQuery: "token",
+      tokenHeader: "X-WebSocket-Token",
+    },
+  },
   tray: {
     enabled: true,
     minimizeToTray: true,
@@ -137,8 +181,10 @@ export const projectConfig = {
 
 export const appFeatures = projectConfig.features;
 export const sidebarConfig = projectConfig.sidebar;
+export const workspaceConfig = projectConfig.workspace;
 export const dashboardConfig = projectConfig.dashboard;
 export const internalApiConfig = projectConfig.api;
+export const serviceConfig = projectConfig.services;
 export const databaseConfig = projectConfig.database;
 
 export const trayConfig = projectConfig.tray;

@@ -8,7 +8,7 @@ Este documento orienta qualquer IA/agente que adapte este template para um novo 
 2. Preserve a arquitetura atual.
 3. Não remova recursos existentes sem autorização explícita.
 4. Não quebre splash, login e sessão.
-5. Não remova o usuário inicial `admin/admin123`, salvo se solicitado.
+5. Preserve o bootstrap exclusivamente interno, o primeiro acesso sem exposição da credencial e a limpeza de arquivos legados; nunca recrie arquivo com senha temporária.
 6. Não altere nomes de arquivos centrais sem necessidade.
 7. Não quebre commands Rust existentes.
 8. Não quebre Vue Router.

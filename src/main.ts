@@ -8,6 +8,26 @@ import { useSessionStore } from "./stores/session";
 import { logAppError, logAppInfo } from "./services/logger";
 import { showSplashError, showSplashWarning } from "./services/splash";
 
+
+function renderBootFallback(title: string, message: string) {
+  const target = document.querySelector('#app');
+  if (!target) return;
+  target.innerHTML = `
+    <div class="scale-simulator-boot-fallback">
+      <main class="scale-simulator-boot-card">
+        <div class="scale-simulator-boot-logo"></div>
+        <h1>${title}</h1>
+        <p>${message}</p>
+        <div class="scale-simulator-boot-error" style="display:block">${message}</div>
+      </main>
+    </div>`;
+}
+
+function notifyBootFallback(message: string) {
+  const fallback = (window as Window & { __templateAppBootError?: (message: string) => void }).__templateAppBootError;
+  if (fallback) fallback(message);
+}
+
 function resolveComponentName(instance: unknown): string | null {
   const raw = instance as { type?: { name?: string }; $options?: { name?: string } } | null;
   return raw?.type?.name ?? raw?.$options?.name ?? null;
@@ -30,43 +50,35 @@ async function bootstrap() {
   };
 
   window.addEventListener("error", (event) => {
-    logAppError("window", "Erro global de janela.", {
-      message: event.message,
-      file: event.filename,
-      line: event.lineno,
-      column: event.colno,
-    });
+    logAppError("window", "Erro global de janela.", { message: event.message, file: event.filename, line: event.lineno, column: event.colno });
     showSplashError(event.message || "Erro global da aplicação.");
   });
 
   window.addEventListener("unhandledrejection", (event) => {
-    logAppError("promise", "Promise rejeitada sem tratamento.", {
-      reason: event.reason instanceof Error ? event.reason.message : String(event.reason),
-    });
+    logAppError("promise", "Promise rejeitada sem tratamento.", { reason: event.reason instanceof Error ? event.reason.message : String(event.reason) });
     showSplashWarning(event.reason instanceof Error ? event.reason.message : String(event.reason));
   });
 
-  const session = useSessionStore(pinia);
-  void session;
+  useSessionStore(pinia);
 
-  try {
-    await Promise.race([
-      router.isReady(),
-      new Promise((resolve) => window.setTimeout(resolve, 3500)),
-    ]);
-    app.mount("#app");
-    logAppInfo("bootstrap", "Aplicação inicializada com sucesso.");
-  } catch (error) {
-    logAppError("bootstrap", "Falha ao montar aplicação.", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    const target = document.querySelector("#app");
-    if (target) {
-      target.innerHTML = `<div style="padding:24px;font-family:Segoe UI,Arial,sans-serif;color:#1f2937"><h2>Falha ao inicializar a aplicação</h2><p>Consulte a página de logs após reiniciar o sistema.</p></div>`;
-    }
+  const target = document.querySelector("#app");
+  if (!target) {
+    notifyBootFallback("Elemento #app não foi encontrado no HTML de inicialização.");
+    return;
   }
+  app.mount("#app");
+  document.body.dataset.templateAppMounted = "true";
+  logAppInfo("bootstrap", "Aplicação montada imediatamente para evitar tela branca no primeiro carregamento.");
+
+  router.isReady().catch((error) => {
+    logAppError("router", "Router demorou ou falhou após montagem inicial.", { error: error instanceof Error ? error.message : String(error) });
+  });
 }
 
-void bootstrap();
-
+bootstrap().catch((error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(error);
+  notifyBootFallback(message);
+  renderBootFallback("Falha ao carregar a interface", message);
+});
 void registerServiceWorker();

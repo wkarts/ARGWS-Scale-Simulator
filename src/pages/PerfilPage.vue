@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import AppModal from "../components/AppModal.vue";
+import BasePage from "../components/base/BasePage.vue";
 import AppSwitch from "../components/AppSwitch.vue";
 import {
   deleteProfile,
@@ -13,6 +14,7 @@ import {
 import { booleanLabel } from "../services/format";
 import { useSessionStore } from "../stores/session";
 import { logAppError, logAppInfo } from "../services/logger";
+import { appConfirm } from "../services/dialog";
 
 const session = useSessionStore();
 const rows = ref<GenericRecord[]>([]);
@@ -125,7 +127,7 @@ async function persist() {
 
 async function removeRow(id: number) {
   if (!canManage.value) return;
-  if (!confirm("Deseja excluir este perfil de acesso?")) return;
+  if (!(await appConfirm({ title: "Excluir perfil", message: "Deseja excluir este perfil de acesso?", danger: true, confirmText: "Excluir" }))) return;
   try {
     await ensureSession();
     await deleteProfile(session.sessionToken!, id);
@@ -151,16 +153,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="grid page-gap">
-    <div class="toolbar">
-      <div>
-        <h2>Perfis de acesso</h2>
-        <div class="muted-text">Listagem fixa com cadastro e edição padronizados em modal.</div>
-      </div>
-      <div class="actions">
-        <button class="secondary" :disabled="!canManage" @click="openNewModal">Novo perfil</button>
-      </div>
-    </div>
+  <BasePage title="Perfis de acesso" subtitle="Listagem fixa com cadastro e edição padronizados em modal." icon="shield">
+    <template #actions>
+      <button class="secondary" :disabled="!canManage" @click="openNewModal">Novo perfil</button>
+    </template>
 
     <div v-if="!session.can('perfis:view')" class="alert error">Você não possui permissão para visualizar perfis.</div>
     <div v-else class="grid page-gap">
@@ -231,8 +227,9 @@ onMounted(async () => {
       width="xl"
       @close="closeModal"
     >
-      <div class="grid page-gap">
-        <div class="section-title">Dados do perfil</div>
+      <div class="grid page-gap profile-modal-shell">
+        <section class="modal-section-card">
+          <div class="section-title">Dados do perfil</div>
         <div class="grid columns-2 mobile-columns-1">
           <div class="field">
             <label>Nome *</label>
@@ -245,25 +242,28 @@ onMounted(async () => {
           </div>
           <AppSwitch v-model="form.ativo" label="Perfil ativo" :disabled="!canManage" />
         </div>
+        </section>
 
-        <div class="section-title">Permissões</div>
+        <section class="modal-section-card">
+          <div class="section-title">Permissões</div>
         <div class="permissions-grid">
           <label v-for="permission in permissions" :key="String(permission.key)" class="permission-card">
             <input
               v-model="form.permission_keys"
-              class="checkbox-input"
               type="checkbox"
               :disabled="!canManage || form.perfil_master"
               :value="String(permission.key)"
             />
+            <span class="permission-switch-ui"></span>
             <div>
               <strong>{{ permission.label }}</strong>
               <div class="muted-row">{{ permission.key }}</div>
             </div>
           </label>
         </div>
+        </section>
 
-        <div class="actions">
+        <div class="actions modal-actions-footer">
           <button class="primary" :disabled="saving || !canManage" @click="persist">
             {{ saving ? "Salvando..." : form.id ? "Atualizar perfil" : "Salvar perfil" }}
           </button>
@@ -271,5 +271,5 @@ onMounted(async () => {
         </div>
       </div>
     </AppModal>
-  </div>
+  </BasePage>
 </template>

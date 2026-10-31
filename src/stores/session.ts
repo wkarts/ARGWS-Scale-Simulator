@@ -13,11 +13,36 @@ export interface AuthUser {
   administrador: boolean;
   master_user: boolean;
   senha_provisoria: boolean;
+  api_access_enabled: boolean;
+  mobile_access_enabled: boolean;
+  api_session_timeout_minutes: number;
+  local_guest: boolean;
+  session_channel?: string | null;
   permission_keys: string[];
   profile_names: string[];
   company_ids: number[];
   company_names: string[];
   photo_url?: string | null;
+}
+
+export interface PasswordPolicy {
+  min_length: number;
+  max_length: number;
+  min_allowed: number;
+  max_allowed: number;
+  require_letter: boolean;
+  require_number: boolean;
+  require_uppercase: boolean;
+  require_lowercase: boolean;
+  require_symbol: boolean;
+}
+
+export interface BootstrapStatus {
+  requires_setup: boolean;
+  username: string;
+  password_policy: PasswordPolicy;
+  environment_password_configured: boolean;
+  legacy_file_detected: boolean;
 }
 
 interface LoginResponse {
@@ -140,20 +165,58 @@ export const useSessionStore = defineStore("session", {
       writeActiveCompany(companyId);
       logAppInfo("tenant", "Empresa ativa alterada.", { companyId });
     },
+    applyLoginResponse(response: LoginResponse) {
+      if (!response.success || !response.user || !response.session_token) {
+        throw new Error(response.message || "Falha ao autenticar.");
+      }
+      this.user = response.user;
+      this.sessionToken = response.session_token;
+      writeStorage(response.session_token);
+      this.ensureActiveCompany();
+      this.initialized = true;
+      return response;
+    },
+    async passwordPolicy(): Promise<PasswordPolicy> {
+      return invokeCommand<PasswordPolicy>("auth_password_policy");
+    },
+    async bootstrapStatus(): Promise<BootstrapStatus> {
+      return invokeCommand<BootstrapStatus>("auth_bootstrap_status");
+    },
+    async initializeMasterPassword(newPassword: string) {
+      this.loading = true;
+      this.lastError = "";
+      try {
+        const response = await invokeCommand<LoginResponse>("auth_initialize_master_password", {
+          new_password: newPassword,
+        });
+        return this.applyLoginResponse(response);
+      } catch (error) {
+        this.lastError = error instanceof Error ? error.message : "Falha ao definir a senha inicial.";
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async loginAsLocalGuest() {
+      this.loading = true;
+      this.lastError = "";
+      try {
+        const response = await invokeCommand<LoginResponse>("auth_local_guest");
+        return this.applyLoginResponse(response);
+      } catch (error) {
+        this.lastError = error instanceof Error ? error.message : "Falha ao iniciar o modo local.";
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
     async login(login: string, senha: string) {
       this.loading = true;
       this.lastError = "";
       try {
         const response = await invokeCommand<LoginResponse>("auth_login", { login, senha });
-        if (!response.success || !response.user || !response.session_token) {
-          throw new Error(response.message || "Falha ao autenticar.");
-        }
-        this.user = response.user;
-        this.sessionToken = response.session_token;
-        writeStorage(response.session_token);
-        this.ensureActiveCompany();
-        this.initialized = true;
-        logAppInfo("auth", "Login concluído no frontend.", { usuario: response.user.login });
+        this.applyLoginResponse(response);
+        logAppInfo("auth", "Login concluído no frontend.", { usuario: response.user?.login });
         return response;
       } catch (error) {
         this.lastError = error instanceof Error ? error.message : "Falha ao autenticar.";
@@ -196,6 +259,48 @@ export const useSessionStore = defineStore("session", {
       } finally {
         this.initialized = true;
         this.restoring = false;
+      }
+    },
+    async validateCurrentSession() {
+      if (!this.sessionToken) return false;
+      try {
+        const response = await invokeCommand<LoginResponse>("auth_restore", {
+          session_token: this.sessionToken,
+        });
+        if (!response.success || !response.user || !response.session_token) {
+          logAppWarning("session", "Sessão expirada ou derrubada por novo login.");
+          this.clearAuthState();
+          return false;
+        }
+        this.user = response.user;
+        this.sessionToken = response.session_token;
+        writeStorage(response.session_token);
+        this.ensureActiveCompany();
+        return true;
+      } catch (error) {
+        this.lastError = error instanceof Error ? error.message : "Sessão inválida ou expirada.";
+        logAppWarning("session", "Sessão invalidada durante monitoramento ativo.", { error: this.lastError });
+        this.clearAuthState();
+        return false;
+      }
+    },
+    async changePassword(currentPassword: string, newPassword: string) {
+      if (!this.sessionToken) throw new Error("Sessão não encontrada.");
+      this.loading = true;
+      this.lastError = "";
+      try {
+        await invokeCommand<boolean>("auth_change_password", {
+          session_token: this.sessionToken,
+          current_password: currentPassword,
+          new_password: newPassword,
+        });
+        if (this.user) this.user.senha_provisoria = false;
+        logAppInfo("auth", "Senha inicial alterada e acesso definitivo liberado.");
+      } catch (error) {
+        this.lastError = error instanceof Error ? error.message : "Falha ao alterar senha.";
+        throw error;
+      } finally {
+        this.loading = false;
       }
     },
     async logout({ silent = false }: { silent?: boolean } = {}) {

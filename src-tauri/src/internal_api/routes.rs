@@ -1,9 +1,9 @@
 use axum::{
     extract::{Request, State},
-    http::{header::HeaderName, StatusCode},
+    http::{header::HeaderName, StatusCode, Uri},
     middleware::{self, Next},
-    response::{Html, IntoResponse, Response},
-    routing::get,
+    response::{Html, IntoResponse, Redirect, Response},
+    routing::{get, post},
     Json, Router,
 };
 use serde_json::{json, Value};
@@ -11,11 +11,11 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
     db::open_connection,
-    internal_api::{docs, state::InternalApiState},
+    internal_api::{app_commands, docs, state::InternalApiState},
 };
 
 fn runtime_app_name() -> String {
-    std::env::var("TEMPLATE_APP_NAME")
+    std::env::var("SCALE_SIMULATOR_NAME")
         .or_else(|_| std::env::var("APP_NAME"))
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -23,31 +23,78 @@ fn runtime_app_name() -> String {
 }
 
 fn runtime_app_identifier() -> String {
-    std::env::var("TEMPLATE_APP_IDENTIFIER")
+    std::env::var("SCALE_SIMULATOR_IDENTIFIER")
         .or_else(|_| std::env::var("APP_IDENTIFIER"))
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "com.template.app".to_string())
+        .unwrap_or_else(|| "br.com.wkarts.scale-simulator-tauri".to_string())
 }
 
 pub fn router(state: InternalApiState) -> Router {
     let protected = Router::new()
+        .route("/api/command", post(app_commands::command))
+        .route("/__internal_api/api/command", post(app_commands::command))
+        .route("/api/auth/login", post(app_commands::auth_login_endpoint))
+        .route(
+            "/__internal_api/api/auth/login",
+            post(app_commands::auth_login_endpoint),
+        )
+        .route(
+            "/api/auth/restore",
+            post(app_commands::auth_restore_endpoint),
+        )
+        .route(
+            "/__internal_api/api/auth/restore",
+            post(app_commands::auth_restore_endpoint),
+        )
+        .route("/api/auth/logout", post(app_commands::auth_logout_endpoint))
+        .route(
+            "/__internal_api/api/auth/logout",
+            post(app_commands::auth_logout_endpoint),
+        )
+        .route(
+            "/api/auth/change-password",
+            post(app_commands::auth_change_password_endpoint),
+        )
+        .route(
+            "/__internal_api/api/auth/change-password",
+            post(app_commands::auth_change_password_endpoint),
+        )
+        .route(
+            "/api/auth/password-policy",
+            get(app_commands::auth_password_policy_endpoint),
+        )
+        .route(
+            "/__internal_api/api/auth/password-policy",
+            get(app_commands::auth_password_policy_endpoint),
+        )
         .route("/version", get(version))
+        .route("/__internal_api/version", get(version))
         .route("/status", get(status))
+        .route("/__internal_api/status", get(status))
         .route("/app/meta", get(app_meta))
+        .route("/__internal_api/app/meta", get(app_meta))
         .route("/features", get(features))
+        .route("/__internal_api/features", get(features))
         .route("/logs", get(logs))
+        .route("/__internal_api/logs", get(logs))
         .route_layer(middleware::from_fn_with_state(state.clone(), token_guard));
 
     let mut router = Router::new()
+        .route("/", get(root))
+        .route("/__internal_api/", get(root))
         .route("/health", get(health))
+        .route("/__internal_api/health", get(health))
         .merge(protected)
         .with_state(state.clone());
 
     if state.config.expose_docs {
+        let proxy_docs_path = format!("/__internal_api{}", state.config.docs.path);
         let docs_router = Router::new()
             .route("/openapi.json", get(openapi))
-            .route(&state.config.docs.path, get(scalar_docs));
+            .route("/__internal_api/openapi.json", get(openapi))
+            .route(&state.config.docs.path, get(scalar_docs))
+            .route(&proxy_docs_path, get(scalar_docs));
 
         router = if state.config.security.require_token
             && !state.config.docs_are_public_for_current_bind()
@@ -96,7 +143,7 @@ async fn token_guard(
         eprintln!("Token obrigatório não configurado");
         return (StatusCode::SERVICE_UNAVAILABLE, Json(json!({
             "error": "API token não configurado no servidor.",
-            "hint": "Defina TEMPLATE_APP_API_TOKEN ou desative TEMPLATE_APP_API_REQUIRE_TOKEN apenas em ambiente local controlado."
+            "hint": "Defina SCALE_SIMULATOR_API_TOKEN ou desative SCALE_SIMULATOR_API_REQUIRE_TOKEN apenas em ambiente local controlado."
         })))
         .into_response();
     }
@@ -114,12 +161,30 @@ async fn token_guard(
         }
     };
 
-    let received = request
+    let query_token = request.uri().query().and_then(|query| {
+        query.split('&').find_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            let key = parts.next().unwrap_or_default();
+            let value = parts.next().unwrap_or_default();
+            if matches!(key, "token" | "api_token" | "x-app-token") {
+                Some(value.trim().to_string())
+            } else {
+                None
+            }
+        })
+    });
+    let header_token = request
         .headers()
         .get(header_name)
         .and_then(|value| value.to_str().ok())
         .unwrap_or_default()
-        .trim();
+        .trim()
+        .to_string();
+    let received = if header_token.is_empty() {
+        query_token.unwrap_or_default()
+    } else {
+        header_token
+    };
 
     if received != configured_token {
         eprintln!("Scalar/API bloqueado por autenticação");
@@ -131,6 +196,20 @@ async fn token_guard(
     }
 
     next.run(request).await
+}
+
+async fn root(State(state): State<InternalApiState>) -> impl IntoResponse {
+    if state.config.expose_docs {
+        Redirect::temporary(&state.config.docs.path).into_response()
+    } else {
+        Json(json!({
+            "ok": true,
+            "service": "internal-api",
+            "version": env!("CARGO_PKG_VERSION"),
+            "health": "/health"
+        }))
+        .into_response()
+    }
 }
 
 async fn health(State(state): State<InternalApiState>) -> Json<Value> {
@@ -232,7 +311,19 @@ async fn openapi(State(state): State<InternalApiState>) -> Json<Value> {
     ))
 }
 
-async fn scalar_docs(State(state): State<InternalApiState>) -> impl IntoResponse {
+async fn scalar_docs(State(_state): State<InternalApiState>, uri: Uri) -> impl IntoResponse {
     eprintln!("Scalar acessado");
-    Html(docs::scalar_html(&state.config.docs.path))
+    let token = uri.query().and_then(|query| {
+        query.split('&').find_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            let key = parts.next().unwrap_or_default();
+            let value = parts.next().unwrap_or_default();
+            if matches!(key, "token" | "api_token" | "x-app-token") {
+                Some(value.to_string())
+            } else {
+                None
+            }
+        })
+    });
+    Html(docs::scalar_html(uri.path(), token.as_deref()))
 }

@@ -19,8 +19,8 @@ test('Tauri wrapper forwards --locked to Cargo without consuming app arguments',
     fs.writeFileSync(cargo, '#!/bin/sh\necho cargo 1.0.0\n', { mode: 0o755 });
     fs.writeFileSync(path.join(temp, 'node_modules/@tauri-apps/cli/tauri.js'), 'console.log("ARGS="+JSON.stringify(process.argv.slice(2)))');
     for (const [input, expected] of [
-      [['build', '--debug'], ['build', '--debug', '--', '--locked']],
-      [['dev', '--', '--offline', '--', '--mode=cli'], ['dev', '--', '--locked', '--offline', '--', '--mode=cli']],
+      [['build', '--debug'], ['build', '--debug', '--features', 'desktop', '--', '--locked']],
+      [['dev', '--', '--offline', '--', '--mode=cli'], ['dev', '--features', 'desktop', '--', '--locked', '--offline', '--', '--mode=cli']],
       [['info'], ['info']],
     ]) {
       const result = spawnSync(process.execPath, ['scripts/ci/run-tauri.mjs', ...input], { cwd: temp, env: { ...process.env, CARGO: cargo }, encoding: 'utf8' });

@@ -166,12 +166,12 @@ struct SimulatorRuntime {
     task: JoinHandle<()>,
 }
 
-#[tauri::command]
+#[cfg_attr(any(feature = "desktop", feature = "mobile"), tauri::command)]
 pub fn scale_simulator_serial_ports() -> Result<Vec<ScaleSimulatorSerialPortInfo>, String> {
     list_serial_ports_with_usage()
 }
 
-#[tauri::command]
+#[cfg_attr(any(feature = "desktop", feature = "mobile"), tauri::command)]
 pub fn scale_simulator_presets() -> Vec<ScaleSimulatorPreset> {
     vec![
         ScaleSimulatorPreset {
@@ -320,7 +320,7 @@ pub fn scale_simulator_presets() -> Vec<ScaleSimulatorPreset> {
     ]
 }
 
-#[tauri::command]
+#[cfg_attr(any(feature = "desktop", feature = "mobile"), tauri::command)]
 pub fn scale_simulator_preview_frame(config: ScaleSimulatorConfig) -> Result<String, String> {
     validate_config(&config)?;
     let state = ScaleState {
@@ -333,7 +333,7 @@ pub fn scale_simulator_preview_frame(config: ScaleSimulatorConfig) -> Result<Str
     transmission_frame(&config, &state)
 }
 
-#[tauri::command]
+#[cfg_attr(any(feature = "desktop", feature = "mobile"), tauri::command)]
 pub async fn scale_simulator_start(
     config: ScaleSimulatorConfig,
 ) -> Result<ScaleSimulatorActionResult, String> {
@@ -476,7 +476,7 @@ pub async fn scale_simulator_start(
     })
 }
 
-#[tauri::command]
+#[cfg_attr(any(feature = "desktop", feature = "mobile"), tauri::command)]
 pub fn scale_simulator_stop(id: String) -> Result<ScaleSimulatorActionResult, String> {
     let runtime = {
         let mut simulators = SIMULATORS
@@ -499,7 +499,7 @@ pub fn scale_simulator_stop(id: String) -> Result<ScaleSimulatorActionResult, St
     })
 }
 
-#[tauri::command]
+#[cfg_attr(any(feature = "desktop", feature = "mobile"), tauri::command)]
 pub fn scale_simulator_stop_all() -> Result<ScaleSimulatorActionResult, String> {
     let runtimes = {
         let mut simulators = SIMULATORS
@@ -521,7 +521,7 @@ pub fn scale_simulator_stop_all() -> Result<ScaleSimulatorActionResult, String> 
     })
 }
 
-#[tauri::command]
+#[cfg_attr(any(feature = "desktop", feature = "mobile"), tauri::command)]
 pub fn scale_simulator_list() -> Result<Vec<ScaleSimulatorStatus>, String> {
     let simulators = SIMULATORS
         .lock()
@@ -532,7 +532,7 @@ pub fn scale_simulator_list() -> Result<Vec<ScaleSimulatorStatus>, String> {
         .collect()
 }
 
-#[tauri::command]
+#[cfg_attr(any(feature = "desktop", feature = "mobile"), tauri::command)]
 pub fn scale_simulator_logs(id: String) -> Result<Vec<ScaleSimulatorLogEntry>, String> {
     let simulators = SIMULATORS
         .lock()
@@ -547,7 +547,7 @@ pub fn scale_simulator_logs(id: String) -> Result<Vec<ScaleSimulatorLogEntry>, S
     Ok(logs.iter().cloned().collect())
 }
 
-#[tauri::command]
+#[cfg_attr(any(feature = "desktop", feature = "mobile"), tauri::command)]
 pub fn scale_simulator_set_weight(
     id: String,
     weight_kg: f64,
@@ -574,7 +574,7 @@ pub fn scale_simulator_set_weight(
     })
 }
 
-#[tauri::command]
+#[cfg_attr(any(feature = "desktop", feature = "mobile"), tauri::command)]
 pub fn scale_simulator_action(
     id: String,
     action: String,

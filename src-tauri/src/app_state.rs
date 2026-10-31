@@ -5,7 +5,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::migrations;
+use crate::{bootstrap, legacy_data, migrations, storage_contract};
 
 #[derive(Debug, Clone)]
 pub struct AppContext {
@@ -39,8 +39,38 @@ impl SharedState {
         std::fs::create_dir_all(&data_dir)
             .map_err(|err| format!("Falha ao criar diretório de dados: {err}"))?;
 
-        let db_path = data_dir.join("app.db");
-        migrations::migrate(&db_path)?;
+        let db_path = storage_contract::sqlite_database_path(&data_dir);
+        let recovery = legacy_data::prepare(&data_dir, &db_path)?;
+        let preserved_legacy_credentials = recovery
+            .as_ref()
+            .map(legacy_data::DatabaseRecovery::preserved_user_credentials)
+            .transpose()?
+            .unwrap_or(false);
+        let mut legacy_credential_restored = false;
+        if let Err(error) = legacy_data::restore_rotated_legacy_credential(&data_dir, &db_path)
+            .and_then(|restored| {
+                legacy_credential_restored = restored;
+                migrations::migrate(&db_path)
+            })
+            .and_then(|_| legacy_data::finalize(&data_dir, &db_path, recovery.as_ref()))
+        {
+            let rollback_error = legacy_data::rollback(&db_path, recovery.as_ref()).err();
+            return Err(match rollback_error {
+                Some(rollback_error) => format!(
+                    "Falha ao preparar o banco do Scale Simulator: {error}. O rollback também falhou: {rollback_error}"
+                ),
+                None => format!(
+                    "Falha ao preparar o banco do Scale Simulator: {error}. O estado anterior foi restaurado."
+                ),
+            });
+        }
+        if preserved_legacy_credentials || legacy_credential_restored {
+            if let Err(error) = bootstrap::remove_legacy_file(&db_path) {
+                eprintln!(
+                    "Aviso: os dados e a credencial legados foram preservados, mas o arquivo bootstrap obsoleto não pôde ser removido: {error}"
+                );
+            }
+        }
 
         let mut guard = self
             .inner
@@ -126,10 +156,10 @@ impl SharedState {
 }
 
 fn runtime_app_local_data_dir() -> String {
-    std::env::var("TEMPLATE_APP_LOCAL_DATA_DIR")
+    std::env::var("SCALE_SIMULATOR_LOCAL_DATA_DIR")
         .or_else(|_| std::env::var("APP_LOCAL_DATA_DIR"))
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "template_app_tauri".to_string())
+        .unwrap_or_else(|| storage_contract::CURRENT_LOCAL_DATA_DIR.to_string())
 }

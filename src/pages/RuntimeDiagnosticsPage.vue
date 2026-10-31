@@ -19,7 +19,7 @@ onMounted(loadDiagnostics);
 </script>
 
 <template>
-  <BasePage title="Diagnóstico do ambiente" subtitle="Verifique os recursos disponíveis no ambiente de execução.">
+  <BasePage title="Diagnóstico do Runtime" subtitle="Validação do mesmo projeto em Web, PWA e Tauri.">
     <template #actions>
       <button class="btn primary" type="button" @click="loadDiagnostics">Atualizar</button>
     </template>

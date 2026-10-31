@@ -4,11 +4,11 @@ Exemplo de unidade systemd:
 
 ```ini
 [Unit]
-Description=Template App Server
+Description=Scale Simulator Server
 After=network.target
 
 [Service]
-ExecStart=/opt/template-app/app-server --mode=headless-api
+ExecStart=/opt/scale-simulator/app-server --mode=headless-api
 Restart=always
 User=templateapp
 Environment=APP_ENV=production

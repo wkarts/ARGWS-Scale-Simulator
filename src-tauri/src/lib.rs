@@ -1,39 +1,70 @@
+#[cfg(all(any(target_os = "android", target_os = "ios"), feature = "desktop"))]
+compile_error!(
+    "Android e iOS devem ser compilados somente com a feature `mobile`; recursos `desktop` não podem ser ativados no alvo mobile."
+);
+
 mod app_state;
+mod bootstrap;
 mod db;
+mod legacy_data;
 mod migrations;
 mod models;
 mod security;
 mod runtime_config;
+mod net_bind;
 #[allow(dead_code)]
 mod core;
 #[allow(dead_code)]
 pub mod internal_api;
 #[allow(dead_code)]
+pub mod native_webhook;
+#[allow(dead_code)]
+pub mod native_websocket;
+#[allow(dead_code)]
 mod integrations;
 #[allow(dead_code)]
 mod service;
+mod storage_contract;
 #[allow(dead_code)]
 pub mod cli;
 
 mod commands {
-    pub mod access;
-    pub mod app;
-    pub mod auth;
-    pub mod companies;
-    pub mod entities;
-    pub mod licensing;
-    pub mod support;
-    pub mod integrations;
-    pub mod runtime;
     pub mod scale_simulator;
     pub mod scale_models;
+    #[cfg(any(feature = "desktop", feature = "mobile"))]
+    pub mod access;
+    #[cfg(any(feature = "desktop", feature = "mobile"))]
+    pub mod app;
+    pub mod auth;
+    #[cfg(any(feature = "desktop", feature = "mobile"))]
+    pub mod companies;
+    pub mod entities;
+    #[cfg(any(feature = "desktop", feature = "mobile"))]
+    pub mod licensing;
+    #[cfg(any(feature = "desktop", feature = "mobile"))]
+    pub mod support;
+    #[cfg(any(feature = "desktop", feature = "mobile"))]
+    pub mod integrations;
+    #[cfg(feature = "desktop")]
+    pub mod runtime;
+    #[cfg(feature = "desktop")]
+    pub mod webhook;
+    #[cfg(feature = "desktop")]
+    pub mod websocket;
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 use app_state::SharedState;
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 use tauri::Manager;
 
+#[cfg(feature = "desktop")]
 pub fn run() {
-    tauri::Builder::default()
+    let _ = crate::runtime_config::init_env_file(None);
+
+    let builder = tauri::Builder::default();
+
+    builder
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if is_tray_enabled() && close_to_tray() {
@@ -45,7 +76,7 @@ pub fn run() {
         .manage(SharedState::new())
         .setup(|app| {
             let state = app.state::<SharedState>();
-            let _ = crate::runtime_config::init_env_file(None);
+            let _ = crate::runtime_config::init_env_file(Some(state.inner()));
             state.init().map_err(|err| -> Box<dyn std::error::Error> {
                 Box::new(std::io::Error::other(err))
             })?;
@@ -59,20 +90,27 @@ pub fn run() {
                 setup_tray(app)?;
             }
 
-            if should_auto_start_services(state.inner()) {
-                if let Ok(config) =
-                    crate::runtime_config::resolve_internal_api_config(state.inner())
-                {
-                    let _ = crate::internal_api::server::start_background(
-                        state.inner().clone(),
-                        config,
-                    );
-                }
-            }
+            // Nenhum serviço de rede deve bloquear a criação da janela Tauri.
+            // A UI monta primeiro; API/Webport/Webhook/WebSocket sobem em segundo plano,
+            // com locks internos para evitar duas rotas tentando abrir a mesma porta.
+            start_runtime_services_background(state.inner().clone());
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::scale_simulator::scale_simulator_serial_ports,
+            commands::scale_simulator::scale_simulator_presets,
+            commands::scale_simulator::scale_simulator_preview_frame,
+            commands::scale_simulator::scale_simulator_start,
+            commands::scale_simulator::scale_simulator_stop,
+            commands::scale_simulator::scale_simulator_stop_all,
+            commands::scale_simulator::scale_simulator_list,
+            commands::scale_simulator::scale_simulator_logs,
+            commands::scale_simulator::scale_simulator_set_weight,
+            commands::scale_simulator::scale_simulator_action,
+            commands::scale_models::scale_models_list,
+            commands::scale_models::scale_model_save,
+            commands::scale_models::scale_model_delete,
             commands::app::app_bootstrap,
             commands::app::app_meta,
             commands::app::system_info,
@@ -84,6 +122,9 @@ pub fn run() {
             commands::auth::auth_restore,
             commands::auth::auth_logout,
             commands::auth::auth_change_password,
+            commands::auth::auth_password_policy,
+            commands::auth::auth_bootstrap_status,
+            commands::auth::auth_initialize_master_password,
             commands::access::permission_catalog,
             commands::access::profile_list,
             commands::access::profile_get,
@@ -132,6 +173,23 @@ pub fn run() {
             commands::runtime::internal_api_restart,
             commands::runtime::internal_api_test_port,
             commands::runtime::internal_api_test,
+            commands::runtime::web_proxy_restart,
+            commands::runtime::web_proxy_stop,
+            commands::runtime::web_proxy_start,
+            commands::runtime::web_proxy_status,
+            commands::webhook::webhook_status,
+            commands::webhook::webhook_start,
+            commands::webhook::webhook_stop,
+            commands::webhook::webhook_restart,
+            commands::webhook::webhook_list_events,
+            commands::webhook::webhook_clear_events,
+            commands::webhook::webhook_test_receive,
+            commands::websocket::websocket_status,
+            commands::websocket::websocket_start,
+            commands::websocket::websocket_stop,
+            commands::websocket::websocket_restart,
+            commands::websocket::websocket_list_clients,
+            commands::websocket::websocket_broadcast_test,
             commands::runtime::runtime_settings_load,
             commands::runtime::runtime_settings_save,
             commands::runtime::runtime_env_example,
@@ -146,9 +204,37 @@ pub fn run() {
             commands::runtime::tray_status,
             commands::runtime::tray_restore_window,
             commands::runtime::tray_exit_app,
-            commands::scale_models::scale_models_list,
-            commands::scale_models::scale_model_save,
-            commands::scale_models::scale_model_delete,
+        ])
+        .run(tauri::generate_context!())
+        .expect("erro ao executar a aplicação Tauri");
+}
+
+#[cfg(all(feature = "mobile", not(feature = "desktop")))]
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let _ = crate::runtime_config::init_env_file(None);
+
+    tauri::Builder::default()
+        .manage(SharedState::new())
+        .setup(|app| {
+            let state = app.state::<SharedState>();
+            let data_dir =
+                app.path()
+                    .app_local_data_dir()
+                    .map_err(|error| -> Box<dyn std::error::Error> {
+                        Box::new(std::io::Error::other(format!(
+                            "Falha ao resolver o diretório local privado do dispositivo: {error}"
+                        )))
+                    })?;
+            state
+                .init_with_data_dir(data_dir)
+                .map_err(|error| -> Box<dyn std::error::Error> {
+                    Box::new(std::io::Error::other(error))
+                })?;
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::scale_simulator::scale_simulator_serial_ports,
             commands::scale_simulator::scale_simulator_presets,
             commands::scale_simulator::scale_simulator_preview_frame,
             commands::scale_simulator::scale_simulator_start,
@@ -158,12 +244,108 @@ pub fn run() {
             commands::scale_simulator::scale_simulator_logs,
             commands::scale_simulator::scale_simulator_set_weight,
             commands::scale_simulator::scale_simulator_action,
-            commands::scale_simulator::scale_simulator_serial_ports,
+            commands::scale_models::scale_models_list,
+            commands::scale_models::scale_model_save,
+            commands::scale_models::scale_model_delete,
+            commands::app::app_bootstrap,
+            commands::app::app_meta,
+            commands::app::system_info,
+            commands::app::system_set_data_dir,
+            commands::app::app_log_write,
+            commands::app::app_log_list,
+            commands::app::app_log_clear,
+            commands::auth::auth_login,
+            commands::auth::auth_restore,
+            commands::auth::auth_logout,
+            commands::auth::auth_change_password,
+            commands::auth::auth_password_policy,
+            commands::auth::auth_bootstrap_status,
+            commands::auth::auth_initialize_master_password,
+            commands::auth::auth_local_guest,
+            commands::access::permission_catalog,
+            commands::access::profile_list,
+            commands::access::profile_get,
+            commands::access::profile_save,
+            commands::access::profile_delete,
+            commands::access::user_list,
+            commands::access::user_get,
+            commands::access::user_policy_get,
+            commands::access::user_policy_save,
+            commands::access::user_save,
+            commands::access::user_delete,
+            commands::companies::company_list,
+            commands::companies::company_get,
+            commands::companies::company_save,
+            commands::companies::company_delete,
+            commands::companies::company_lookup_cnpj,
+            commands::companies::company_lookup_ie,
+            commands::entities::entity_list,
+            commands::entities::entity_save,
+            commands::entities::entity_delete,
+            commands::entities::combo_list,
+            commands::entities::entity_provider_list,
+            commands::entities::provider_entity_list,
+            commands::entities::provider_entity_get,
+            commands::entities::provider_entity_create,
+            commands::entities::provider_entity_update,
+            commands::entities::provider_entity_delete,
+            commands::licensing::licensing_status,
+            commands::licensing::licensing_load_settings,
+            commands::licensing::licensing_save_settings,
+            commands::licensing::licensing_device_info,
+            commands::licensing::licensing_check_runtime,
+            commands::licensing::licensing_start_trial,
+            commands::support::support_guard_status,
+            commands::support::support_guard_provision,
+            commands::support::support_guard_enable_totp,
+            commands::support::support_guard_unlock,
+            commands::integrations::integration_list,
+            commands::integrations::integration_save,
+            commands::integrations::integration_delete,
+            commands::integrations::integration_test,
+            commands::integrations::integration_logs,
         ])
         .run(tauri::generate_context!())
-        .expect("erro ao executar a aplicação Tauri");
+        .expect("erro ao executar a aplicação Tauri mobile");
 }
 
+#[cfg(feature = "desktop")]
+fn start_runtime_services_background(state: SharedState) {
+    std::thread::Builder::new()
+        .name("scale-simulator-runtime-services-orchestrator".to_string())
+        .spawn(move || {
+            if should_start_internal_api(&state) {
+                match crate::runtime_config::resolve_internal_api_config(&state) {
+                    Ok(config) => {
+                        if let Err(err) =
+                            crate::internal_api::server::start_background(state.clone(), config)
+                        {
+                            eprintln!("Falha ao iniciar API interna: {err}");
+                        }
+                    }
+                    Err(err) => eprintln!("Falha ao resolver configuração da API interna: {err}"),
+                }
+            }
+
+            if should_start_web_proxy(&state) {
+                if let Err(err) = crate::internal_api::web_server::start_background(state.clone()) {
+                    eprintln!("Falha ao iniciar Webport/proxy: {err}");
+                }
+            }
+
+            if should_auto_start_webhook_service(&state) {
+                let _ = crate::native_webhook::server::start_background(state.clone());
+            }
+
+            if should_auto_start_websocket_service(&state) {
+                let _ = crate::native_websocket::server::start_background(state);
+            }
+        })
+        .map(|_| ())
+        .unwrap_or_else(|err| eprintln!("Falha ao iniciar orquestrador de serviços: {err}"));
+}
+
+#[cfg(feature = "desktop")]
 fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri::menu::{Menu, MenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -178,8 +360,28 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         None::<&str>,
     )?;
     let api_stop = MenuItem::with_id(app, "api_stop", "Parar API interna", true, None::<&str>)?;
+    let webhook_start =
+        MenuItem::with_id(app, "webhook_start", "Iniciar Webhooks", true, None::<&str>)?;
+    let websocket_start = MenuItem::with_id(
+        app,
+        "websocket_start",
+        "Iniciar WebSocket",
+        true,
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, "quit", "Sair definitivamente", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&restore, &api_start, &api_restart, &api_stop, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &restore,
+            &api_start,
+            &api_restart,
+            &api_stop,
+            &webhook_start,
+            &websocket_start,
+            &quit,
+        ],
+    )?;
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
         .tooltip(runtime_app_name())
@@ -233,6 +435,14 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             "api_stop" => {
                 let _ = crate::internal_api::server::stop_background();
             }
+            "webhook_start" => {
+                let state = app.state::<SharedState>();
+                let _ = crate::native_webhook::server::start_background(state.inner().clone());
+            }
+            "websocket_start" => {
+                let state = app.state::<SharedState>();
+                let _ = crate::native_websocket::server::start_background(state.inner().clone());
+            }
             "quit" => app.exit(0),
             _ => {}
         });
@@ -246,14 +456,16 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(feature = "desktop")]
 fn runtime_app_name() -> String {
-    std::env::var("TEMPLATE_APP_NAME")
+    std::env::var("SCALE_SIMULATOR_NAME")
         .or_else(|_| std::env::var("APP_NAME"))
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "Scale Simulator".to_string())
 }
 
+#[cfg(feature = "desktop")]
 fn env_bool(key: &str, default: bool) -> bool {
     std::env::var(key)
         .ok()
@@ -266,21 +478,95 @@ fn env_bool(key: &str, default: bool) -> bool {
         .unwrap_or(default)
 }
 
+#[cfg(feature = "desktop")]
 fn is_tray_enabled() -> bool {
-    env_bool("TEMPLATE_APP_TRAY_ENABLED", true)
+    env_bool("SCALE_SIMULATOR_TRAY_ENABLED", true)
 }
 
+#[cfg(feature = "desktop")]
 fn close_to_tray() -> bool {
-    env_bool("TEMPLATE_APP_TRAY_CLOSE_TO_TRAY", false)
+    env_bool("SCALE_SIMULATOR_TRAY_CLOSE_TO_TRAY", false)
 }
 
-fn should_auto_start_services(state: &SharedState) -> bool {
-    crate::runtime_config::load_settings(state)
-        .map(|payload| {
-            payload.settings.services_auto_start || payload.settings.internal_api_auto_start
-        })
-        .unwrap_or_else(|_| {
-            env_bool("TEMPLATE_APP_SERVICES_AUTO_START", false)
-                || env_bool("TEMPLATE_APP_API_AUTO_START", false)
-        })
+#[cfg(feature = "desktop")]
+fn should_start_internal_api(state: &SharedState) -> bool {
+    let settings = crate::runtime_config::load_settings(state)
+        .map(|payload| payload.settings)
+        .unwrap_or_default();
+    settings.internal_api_auto_start
+        && !env_bool("SCALE_SIMULATOR_API_DISABLED", false)
+        && !env_bool("APP_API_DISABLED", false)
+        && !env_bool("SCALE_SIMULATOR_INTERNAL_API_DISABLED", false)
+}
+
+#[cfg(feature = "desktop")]
+fn should_start_web_proxy(state: &SharedState) -> bool {
+    let settings = crate::runtime_config::load_settings(state)
+        .map(|payload| payload.settings)
+        .unwrap_or_default();
+    let enabled = settings.local_web_enabled
+        && !env_bool("SCALE_SIMULATOR_WEB_DISABLED", false)
+        && !env_bool("APP_WEB_DISABLED", false);
+    let requested = settings.local_web_auto_start
+        || settings.services_auto_start
+        || env_bool("SCALE_SIMULATOR_SERVICES_AUTO_START", false)
+        || arg_present(&[
+            "--start-web-proxy",
+            "--web-proxy-auto-start",
+            "--start-webport",
+            "--webport-auto-start",
+            "--start-services",
+            "--services-auto-start",
+            "--auto-start-services",
+        ]);
+    enabled && requested
+}
+
+#[cfg(feature = "desktop")]
+fn should_auto_start_webhook_service(state: &SharedState) -> bool {
+    let settings = crate::runtime_config::load_settings(state)
+        .map(|payload| payload.settings)
+        .unwrap_or_default();
+    let enabled = settings.webhook_enabled
+        && !env_bool("SCALE_SIMULATOR_WEBHOOK_DISABLED", false)
+        && !env_bool("APP_WEBHOOK_DISABLED", false);
+    let requested = settings.webhook_auto_start
+        || settings.services_auto_start
+        || env_bool("SCALE_SIMULATOR_SERVICES_AUTO_START", false)
+        || arg_present(&[
+            "--start-webhook",
+            "--webhook-auto-start",
+            "--webhook",
+            "--start-services",
+            "--services-auto-start",
+            "--auto-start-services",
+        ]);
+    enabled && requested
+}
+
+#[cfg(feature = "desktop")]
+fn should_auto_start_websocket_service(state: &SharedState) -> bool {
+    let settings = crate::runtime_config::load_settings(state)
+        .map(|payload| payload.settings)
+        .unwrap_or_default();
+    let enabled = settings.websocket_enabled
+        && !env_bool("SCALE_SIMULATOR_WEBSOCKET_DISABLED", false)
+        && !env_bool("APP_WEBSOCKET_DISABLED", false);
+    let requested = settings.websocket_auto_start
+        || settings.services_auto_start
+        || env_bool("SCALE_SIMULATOR_SERVICES_AUTO_START", false)
+        || arg_present(&[
+            "--start-websocket",
+            "--websocket-auto-start",
+            "--websocket",
+            "--start-services",
+            "--services-auto-start",
+            "--auto-start-services",
+        ]);
+    enabled && requested
+}
+
+#[cfg(feature = "desktop")]
+fn arg_present(names: &[&str]) -> bool {
+    std::env::args().any(|arg| names.iter().any(|name| arg.eq_ignore_ascii_case(name)))
 }

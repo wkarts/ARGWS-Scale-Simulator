@@ -1,4 +1,4 @@
-# Etapa 2 funcional — Template App Tauri 0.1.8
+# Etapa 2 funcional — Scale Simulator Tauri 0.1.8
 
 Esta etapa converteu os principais placeholders da versão professional em implementação funcional mínima e extensível, preservando o desktop Tauri atual.
 

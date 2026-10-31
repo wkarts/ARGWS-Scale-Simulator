@@ -4,6 +4,7 @@ use std::{env, path::PathBuf};
 pub enum RuntimeMode {
     Desktop,
     HeadlessApi,
+    WebProxy,
     Cli,
     Worker,
 }
@@ -15,19 +16,27 @@ pub struct CliArgs {
     pub port: u16,
     pub database_driver: String,
     pub data_dir: Option<PathBuf>,
+    pub start_web_proxy: bool,
+    pub start_webhook: bool,
+    pub start_websocket: bool,
+    pub start_services: bool,
 }
 
 impl Default for CliArgs {
     fn default() -> Self {
         Self {
             mode: RuntimeMode::Desktop,
-            host: env::var("TEMPLATE_APP_API_HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
-            port: env::var("TEMPLATE_APP_API_PORT")
+            host: env::var("SCALE_SIMULATOR_API_HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
+            port: env::var("SCALE_SIMULATOR_API_PORT")
                 .ok()
                 .and_then(|value| value.parse::<u16>().ok())
                 .unwrap_or(61001),
             database_driver: "sqlite".to_string(),
             data_dir: None,
+            start_web_proxy: false,
+            start_webhook: false,
+            start_websocket: false,
+            start_services: false,
         }
     }
 }
@@ -86,6 +95,29 @@ impl CliArgs {
                     }
                     index += 1;
                 }
+            } else if matches!(
+                arg.as_str(),
+                "--start-web-proxy"
+                    | "--web-proxy-auto-start"
+                    | "--start-webport"
+                    | "--webport-auto-start"
+            ) {
+                parsed.start_web_proxy = true;
+            } else if matches!(
+                arg.as_str(),
+                "--start-webhook" | "--webhook-auto-start" | "--webhook"
+            ) {
+                parsed.start_webhook = true;
+            } else if matches!(
+                arg.as_str(),
+                "--start-websocket" | "--websocket-auto-start" | "--websocket"
+            ) {
+                parsed.start_websocket = true;
+            } else if matches!(
+                arg.as_str(),
+                "--start-services" | "--services-auto-start" | "--auto-start-services"
+            ) {
+                parsed.start_services = true;
             }
             index += 1;
         }
@@ -96,6 +128,7 @@ impl CliArgs {
 fn parse_mode(value: &str) -> RuntimeMode {
     match value.trim().to_ascii_lowercase().as_str() {
         "headless-api" | "server" | "api" => RuntimeMode::HeadlessApi,
+        "web-proxy" | "webport" | "web" | "proxy" => RuntimeMode::WebProxy,
         "cli" => RuntimeMode::Cli,
         "worker" => RuntimeMode::Worker,
         _ => RuntimeMode::Desktop,

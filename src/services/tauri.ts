@@ -107,6 +107,40 @@ function withTauriArgAliases<T>(value: T): T {
   return result as T;
 }
 
+function isSessionInvalidError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("sessão inválida")
+    || normalized.includes("sessao invalida")
+    || normalized.includes("sessão expirada")
+    || normalized.includes("sessao expirada")
+    || normalized.includes("session invalid")
+    || normalized.includes("session expired");
+}
+
+async function forceLoginOnInvalidSession(message: string) {
+  try {
+    const [{ useSessionStore }, { default: router }] = await Promise.all([
+      import("../stores/session"),
+      import("../router"),
+    ]);
+    const session = useSessionStore();
+    if (session.sessionToken || session.user) {
+      session.clearAuthState();
+    }
+    showSplashWarning("Sua sessão foi encerrada porque houve novo acesso em outro dispositivo ou porque ela expirou. Faça login novamente.");
+    const [{ isNativeMobileRuntime }, { mobileMode }] = await Promise.all([
+      import("../core/runtime/RuntimeProvider"),
+      import("../core/mobile/MobileConnection"),
+    ]);
+    const target = isNativeMobileRuntime() && mobileMode() === "unconfigured" ? "/mobile-inicio" : "/login";
+    if (router.currentRoute.value.path !== target) {
+      await router.replace(target);
+    }
+  } catch {
+    showSplashWarning(message || "Sessão expirada. Faça login novamente.");
+  }
+}
+
 export async function invokeCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const normalizedArgs = withTauriArgAliases(args);
   try {
@@ -115,7 +149,9 @@ export async function invokeCommand<T>(command: string, args?: Record<string, un
     return response;
   } catch (error) {
     const errorText = error instanceof Error ? error.message : String(error);
-    if (errorText.includes("429 Too Many Requests") || errorText.toLowerCase().includes("rate limit")) {
+    if (isSessionInvalidError(errorText)) {
+      await forceLoginOnInvalidSession(errorText);
+    } else if (errorText.includes("429 Too Many Requests") || errorText.toLowerCase().includes("rate limit")) {
       showSplashWarning("Limite temporário de consulta atingido nos serviços públicos. Aguarde alguns segundos e tente novamente.");
     } else {
       showSplashError(errorText);

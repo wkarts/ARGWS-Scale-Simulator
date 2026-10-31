@@ -13,7 +13,7 @@ if (p.existing) {
   run(process.execPath,['scripts/ci/check-version-sync.mjs','--tag',p.tag],{stdio:'inherit'});
   git('config','user.name','github-actions[bot]');
   git('config','user.email','41898282+github-actions[bot]@users.noreply.github.com');
-  git('add','VERSION','package.json','package-lock.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','src-tauri/tauri.conf.json','src/config/projectConfig.ts');
+  git('add','VERSION','package.json','package-lock.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','src-tauri/tauri.conf.json','src/config/projectConfig.ts', 'src/assets/branding/brand.json');
   if (git('diff','--cached','--name-only')) git('commit','-m',`chore(release): ${p.version}`);
   git('tag','-a',p.tag,'-m',`Scale Simulator ${p.version}\nSource: ${source}`);
   git('push','origin',`refs/tags/${p.tag}`);

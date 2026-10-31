@@ -1,6 +1,7 @@
 use chrono::Utc;
 use rusqlite::{params_from_iter, OptionalExtension};
 use serde_json::{json, Map, Value};
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 use tauri::State;
 
 use crate::{
@@ -174,6 +175,7 @@ fn normalize_value(payload: &Map<String, Value>, field: &str) -> Value {
     }
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn entity_list(
     state: State<'_, SharedState>,
@@ -219,6 +221,7 @@ pub fn entity_list(
     rows.map_err(|err| format!("Falha ao mapear listagem de {}: {err}", definition.table))
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn combo_list(
     state: State<'_, SharedState>,
@@ -250,6 +253,7 @@ pub fn combo_list(
     result.map_err(|err| format!("Falha ao mapear combo de {}: {err}", definition.table))
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn entity_save(
     state: State<'_, SharedState>,
@@ -369,6 +373,7 @@ pub fn entity_save(
     Ok(saved)
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn entity_delete(
     state: State<'_, SharedState>,
@@ -399,8 +404,8 @@ fn db_value_from_json(value: Value) -> crate::core::database::provider::types::D
 }
 
 fn current_provider_driver() -> String {
-    std::env::var("TEMPLATE_APP_DATABASE_DRIVER")
-        .or_else(|_| std::env::var("TEMPLATE_APP_DB_DRIVER"))
+    std::env::var("SCALE_SIMULATOR_DATABASE_DRIVER")
+        .or_else(|_| std::env::var("SCALE_SIMULATOR_DB_DRIVER"))
         .unwrap_or_else(|_| "sqlite".to_string())
         .trim()
         .to_ascii_lowercase()
@@ -465,7 +470,7 @@ pub fn provider_list_with_database(
     provider.query(&sql, &params)
 }
 
-fn provider_get_with_database(
+pub(crate) fn provider_get_with_database(
     provider: &dyn crate::core::database::provider::DatabaseProvider,
     entity: &str,
     id: i64,
@@ -550,7 +555,7 @@ fn provider_enqueue_sync(
     Ok(())
 }
 
-fn provider_save_with_database(
+pub(crate) fn provider_save_with_database(
     provider: &dyn crate::core::database::provider::DatabaseProvider,
     entity: String,
     payload: Map<String, Value>,
@@ -673,7 +678,7 @@ fn provider_save_with_database(
     Ok(saved)
 }
 
-fn provider_delete_with_database(
+pub(crate) fn provider_delete_with_database(
     provider: &dyn crate::core::database::provider::DatabaseProvider,
     entity: String,
     id: i64,
@@ -698,6 +703,7 @@ fn provider_delete_with_database(
     Ok(affected > 0)
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn entity_provider_list(
     state: State<'_, SharedState>,
@@ -708,6 +714,7 @@ pub fn entity_provider_list(
     provider_list_with_database(&provider, &entity, &search)
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn provider_entity_list(
     state: State<'_, SharedState>,
@@ -717,6 +724,7 @@ pub fn provider_entity_list(
     entity_provider_list(state, entity, search)
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn provider_entity_get(
     state: State<'_, SharedState>,
@@ -727,6 +735,7 @@ pub fn provider_entity_get(
     provider_get_with_database(&provider, &entity, id)
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn provider_entity_create(
     state: State<'_, SharedState>,
@@ -737,6 +746,7 @@ pub fn provider_entity_create(
     provider_save_with_database(&provider, entity, payload)
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn provider_entity_update(
     state: State<'_, SharedState>,
@@ -752,6 +762,7 @@ pub fn provider_entity_update(
     provider_save_with_database(&provider, entity, payload)
 }
 
+#[cfg(any(feature = "desktop", feature = "mobile"))]
 #[tauri::command]
 pub fn provider_entity_delete(
     state: State<'_, SharedState>,

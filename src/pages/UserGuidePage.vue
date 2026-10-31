@@ -1,16 +1,10 @@
 <script setup lang="ts">
-import BasePage from "../components/base/BasePage.vue";
-import BaseSectionCard from "../components/base/BaseSectionCard.vue";
+import {computed,ref} from 'vue';
+import BasePage from '../components/base/BasePage.vue';
+import BaseSectionCard from '../components/base/BaseSectionCard.vue';
+import {simulatorGuide,guideMarkdown} from '../content/simulatorGuide';
+const search=ref('');const sections=computed(()=>simulatorGuide.filter(s=>(s.title+' '+s.text).toLocaleLowerCase('pt-BR').includes(search.value.toLocaleLowerCase('pt-BR'))));
+function download(){const url=URL.createObjectURL(new Blob([guideMarkdown()],{type:'text/markdown;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='Scale-Simulator-Guia.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 </script>
-<template>
-  <BasePage title="Guia de simulação" subtitle="Do primeiro quadro ao teste de integração.">
-    <div class="grid columns-2 mobile-columns-1">
-      <BaseSectionCard title="1. Escolha o indicador"><p>Abra Simulador de balanças e selecione um dos nove modelos. Confira a prévia do quadro e os parâmetros de capacidade, divisão e peso inicial.</p></BaseSectionCard>
-      <BaseSectionCard title="2. Configure a conexão"><p>Para TCP, escolha endereço e porta livres e conecte seu sistema cliente. Para RS232, escolha a porta serial e a velocidade compatível com o sistema que receberá os dados.</p><p>Uma conexão serial virtual precisa de um par de portas configurado no sistema operacional. Não conecte os dois aplicativos à mesma ponta.</p></BaseSectionCard>
-      <BaseSectionCard title="3. Inicie e acompanhe"><p>Inicie a instância e observe o peso, os clientes conectados, o último quadro e os logs. Ajuste o peso, aplique tara ou simule instabilidade pelos controles disponíveis.</p><p>No modo por comando, a balança responde às solicitações do cliente. No modo contínuo, envia os quadros no intervalo configurado.</p></BaseSectionCard>
-      <BaseSectionCard title="4. Confira o protocolo"><p>Ajuste bits de dados, paridade e bits de parada conforme o receptor. O Toledo 8540 inicia em 7E1 e permite 7E2; os demais modelos iniciam em 8N1. Ao trocar o modelo ou preset, esses padrões são restaurados. Os quadros contínuos contêm bytes de status; a visualização textual pode incluir caracteres não imprimíveis.</p><p>Ao terminar, pare as instâncias para liberar as portas. A prévia web não abre portas TCP ou RS232.</p></BaseSectionCard>
-      <BaseSectionCard title="Testes avançados de enquadramento"><p>A seção Enquadramento avançado é opcional e fica desativada por padrão. Permite substituir ou remover prefixo e terminador em HEX, por exemplo STX 02, ETX 03, CR 0D e LF 0A.</p><p>No Toledo 8540, o checksum pode ser correto, corrompido ou omitido para testar o receptor. Essas opções podem produzir quadros inválidos. Confira a prévia; trocar o driver ou preset restaura o enquadramento original.</p></BaseSectionCard>
-      <BaseSectionCard title="Acesso e diagnóstico"><p>As contas, empresas e permissões ficam em Administração. Configurações, banco local e diagnósticos ficam em Ferramentas. O tema claro é o padrão; sua escolha de tema é salva localmente.</p></BaseSectionCard>
-    </div>
-  </BasePage>
-</template>
+<template><BasePage title="Guia do Scale Simulator" subtitle="Orientação incorporada ao aplicativo, disponível sem depender de um site externo."><div class="guide-search"><label>Pesquisar orientação<input v-model="search" type="search" placeholder="Modelos, Playground, RS232, TCP…" /></label><button @click="download">Baixar guia em Markdown</button></div><div class="grid columns-2 mobile-columns-1"><BaseSectionCard v-for="section in sections" :key="section.title" :title="section.title"><p>{{section.text}}</p></BaseSectionCard></div><p v-if="!sections.length">Nenhum tópico encontrado.</p></BasePage></template>
+<style scoped>.guide-search{display:flex;gap:1rem;align-items:end;flex-wrap:wrap;margin-bottom:1rem}.guide-search label{display:grid;gap:.5rem;flex:1;min-width:240px}p{line-height:1.7}</style>

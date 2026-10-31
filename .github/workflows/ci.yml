@@ -1,158 +1,417 @@
 name: CI
 
 on:
+  pull_request:
   push:
     branches:
       - main
       - develop
-      - 'release/**'
-  pull_request:
+      - "release/**"
   workflow_dispatch:
-    inputs:
-      full_rust_ci:
-        description: 'Executar validação Rust completa com dependências Tauri Linux'
-        required: false
-        default: 'true'
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  CARGO_INCREMENTAL: 0
+  CARGO_INCREMENTAL: "0"
   CARGO_TERM_COLOR: always
+  NODE_VERSION: "24"
 
 jobs:
-  pr-title:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  workflow-lint:
+    name: GitHub Actions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
         with:
-          node-version: '24'
+          go-version: "1.26.x"
+          cache: false
+
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      - name: Validate workflows
+        run: actionlint
+
+  pr-title:
+    name: Pull Request title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - name: Instalar dependências mínimas
+
+      - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --no-fund
-      - name: Validar título do PR
+
+      - name: Validate title
         run: npm run ci:pr-title
 
-  frontend:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  static:
+    name: Project structure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Validate project structure
+        run: python3 scripts/ci/validate-tauri-project.py --project . --mode static
+
+  delivery-scripts:
+    name: Delivery scripts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate shell scripts
+        run: |
+          bash -n scripts/linux/build-cloudpanel-release.sh
+          bash -n scripts/linux/build-cloudpanel-release-docker.sh
+          bash -n scripts/linux/install-cloudpanel-build-deps.sh
+          bash -n scripts/mobile/build-ios-unsigned.sh
+          bash -n scripts/release/package-ios-unsigned.sh
+          bash -n deploy/cloudpanel/start.sh
+          bash -n deploy/cloudpanel/stop.sh
+          bash -n deploy/cloudpanel/restart.sh
+          bash -n deploy/cloudpanel/status.sh
+          bash -n deploy/cloudpanel/check.sh
+          bash -n deploy/cloudpanel/cli.sh
+          bash -n deploy/cloudpanel/worker.sh
+          bash -n deploy/cloudpanel/ports.sh
+
+      - name: Validate Node.js delivery scripts
+        run: |
+          node --check scripts/mobile/generate-mobile-icons.mjs
+          find scripts -type f -name '*.mjs' -print0 | xargs -0 -n1 node --check
+
+      - name: Test release pipeline
+        run: node --test scripts/release/tests/*.test.mjs
+
+  windows-build-script:
+    name: Windows build script
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "scripts/windows/build-windows.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
+  frontend:
+    name: Vue, TypeScript and Web/PWA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - name: Instalar dependências frontend
+
+      - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --no-fund
-      - name: Validar sincronismo de versão
+
+      - name: Validate version synchronization
         run: npm run ci:version
-      - name: Protocol and release tests
-        run: node --test tests/*.test.mjs scripts/release/tests/*.test.mjs
+
       - name: Typecheck
         run: npm run typecheck
-      - name: Build web
+
+      - name: Build Web/PWA
         run: npm run build:web
 
-  rust-format:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+      - name: Playground and simulator regression
+        run: node --test tests/*.test.mjs
+
+      - name: Store Web/PWA for dependent checks outside pull requests
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-web-dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  rust:
+    name: Rust and Tauri
+    needs: frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v4
-      - name: Rust stable com rustfmt
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Restore Web/PWA for Tauri context outside pull requests
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: ci-web-dist
+          path: dist
+
+      - name: Prepare deterministic Tauri assets for Rust checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f dist/index.html ]]; then
+            mkdir -p dist
+            printf '%s\n' '<!doctype html><html><body>CI Rust validation</body></html>' > dist/index.html
+          fi
+          node ./scripts/prepare-tauri-resources.mjs
+
+      - name: Install Tauri dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libudev-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf
+
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
-      - name: cargo fmt --check
+          components: clippy,rustfmt
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-on-failure: true
+
+      - name: Resolve Cargo lockfile
+        run: test -f src-tauri/Cargo.lock
+
+      - name: Preserve plain headless build without default features
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo tree --manifest-path src-tauri/Cargo.toml --locked --no-default-features --edges normal,build \
+            --prefix none --format '{p}' > /tmp/headless-packages.txt
+          forbidden='^(tauri|tauri-build|tauri-runtime|tauri-runtime-wry|wry|gtk|gtk-sys|gdk|gdk-sys|webkit2gtk|webkit2gtk-sys|tray-icon|muda|libappindicator|libappindicator-sys)$'
+          if awk '{print $1}' /tmp/headless-packages.txt | grep -E "${forbidden}"; then
+            echo "Grafo headless contém dependências gráficas/Tauri." >&2
+            exit 1
+          fi
+          cargo build --manifest-path src-tauri/Cargo.toml --locked --no-default-features
+
+      - name: Check formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
 
-  rust-check:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 35
+      - name: Cargo check
+        run: cargo check --manifest-path src-tauri/Cargo.toml --locked --all-targets --all-features
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets --all-features -- -D warnings
+
+      - name: Tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --all-targets --all-features
+
+  rust-features:
+    name: Rust feature ${{ matrix.label }}
+    needs: rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: SQLite
+            features: desktop
+          - label: MySQL
+            features: desktop,mysql-db
+          - label: PostgreSQL
+            features: desktop,postgres-db
+          - label: MySQL and PostgreSQL
+            features: desktop,mysql-db,postgres-db
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Restore Web/PWA for Tauri context outside pull requests
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
         with:
-          fetch-depth: 0
-      - name: Detectar alterações Rust/Tauri
-        id: changes
+          name: ci-web-dist
+          path: dist
+
+      - name: Prepare deterministic Tauri assets for feature checks
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin "${{ github.base_ref }}" --depth=1
-            CHANGED_FILES=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)
-          else
-            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+          if [[ ! -f dist/index.html ]]; then
+            mkdir -p dist
+            printf '%s\n' '<!doctype html><html><body>CI Rust feature validation</body></html>' > dist/index.html
+          fi
+          node ./scripts/prepare-tauri-resources.mjs
+
+      - name: Install Tauri dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libudev-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          key: features-${{ matrix.features }}
+          cache-on-failure: true
+
+      - name: Resolve Cargo lockfile
+        run: test -f src-tauri/Cargo.lock
+
+      - name: Check database feature
+        run: >-
+          cargo check --manifest-path src-tauri/Cargo.toml --locked
+          --no-default-features --features "${{ matrix.features }}"
+
+  cloudpanel-headless:
+    name: CloudPanel headless Linux ${{ matrix.arch }}
+    needs: frontend
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-unknown-linux-gnu
+          - arch: x86
+            target: i686-unknown-linux-gnu
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Restore Web/PWA for CloudPanel outside pull requests
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: ci-web-dist
+          path: dist
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Rebuild Web/PWA locally when artifact storage is unavailable
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f dist/index.html ]]; then
+            npm ci --prefer-offline --no-audit --no-fund
+            npm run build:web
           fi
 
-          echo "$CHANGED_FILES"
-          if echo "$CHANGED_FILES" | grep -E '^(src-tauri/|Cargo\.toml|Cargo\.lock|rustfmt\.toml|\.github/workflows/|scripts/(fix-rust-format|.*rust).*)' >/dev/null; then
-            echo "rust_changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "rust_changed=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Definir se executa Rust completo
-        id: full
-        shell: bash
-        run: |
-          set -euo pipefail
-          RUN_FULL="false"
-          if [ "${{ github.event_name }}" != "pull_request" ] || [ "${{ steps.changes.outputs.rust_changed }}" = "true" ]; then
-            RUN_FULL="true"
-          fi
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.full_rust_ci }}" = "true" ]; then
-            RUN_FULL="true"
-          fi
-          echo "run_full=$RUN_FULL" >> "$GITHUB_OUTPUT"
-      - name: Validação Rust completa ignorada na PR
-        if: steps.full.outputs.run_full != 'true'
-        run: |
-          echo "PR rápida: rust-format já validou rustfmt."
-          echo "Clippy/test/features completos rodam em push/main/release ou workflow_dispatch."
-          echo "Use workflow_dispatch com full_rust_ci=true para validação completa sob demanda."
-      - name: Sem alterações Rust/Tauri
-        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed != 'true'
-        run: echo "Nenhuma alteração Rust/Tauri detectada. Pulando clippy/test/features."
-      - name: Cache pacotes apt Tauri
-        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev
-          version: 1.0
-      - name: Rust stable com clippy
-        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
+      - name: Setup Rust target
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
-      - name: Cache Rust
-        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
-        uses: swatinem/rust-cache@v2
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> target"
+          key: ci-cloudpanel-headless-${{ matrix.target }}
           cache-on-failure: true
-      - name: Prepare desktop frontend
-        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
-        run: npm ci --no-audit --no-fund && npm run build:web
-      - name: cargo clippy
-        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
-        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
-      - name: cargo test
-        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --all-targets --all-features
-      - name: Build Rust features opcionais
-        if: steps.full.outputs.run_full == 'true' && steps.changes.outputs.rust_changed == 'true'
-        run: |
-          cargo build --locked --manifest-path src-tauri/Cargo.toml --features mysql-db
-          cargo build --locked --manifest-path src-tauri/Cargo.toml --features postgres-db
-          cargo build --locked --manifest-path src-tauri/Cargo.toml --features mysql-db,postgres-db
+
+      - name: Install CloudPanel build dependencies
+        run: bash ./scripts/linux/install-cloudpanel-build-deps.sh --${{ matrix.arch }}
+
+      - name: Build and package CloudPanel headless
+        env:
+          BUILD_WEB: "false"
+        run: bash ./scripts/linux/build-cloudpanel-release.sh --${{ matrix.arch }}
+
+      - name: Store validated CloudPanel package outside pull requests
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-cloudpanel-linux-${{ matrix.arch }}
+          path: |
+            release/cloudpanel/*linux-${{ matrix.arch }}.tar.gz
+            release/cloudpanel/*linux-${{ matrix.arch }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  legacy-migration:
+    name: Legacy SQLite migration and bootstrap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run executable migration scenarios
+        run: >-
+          cargo run --manifest-path tests/legacy-migration-harness/Cargo.toml
+          --locked

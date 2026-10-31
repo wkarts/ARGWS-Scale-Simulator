@@ -1,3 +1,4 @@
+import { appAlert } from "../../services/dialog";
 import type { NotificationProvider } from "./NotificationProvider";
 
 export class WebNotificationProvider implements NotificationProvider {
@@ -7,7 +8,7 @@ export class WebNotificationProvider implements NotificationProvider {
 
   async notify(title: string, message: string): Promise<void> {
     if (!("Notification" in window)) {
-      alert(`${title}\n${message}`);
+      await appAlert({ title, message });
       return;
     }
     if (Notification.permission === "default") {
@@ -17,6 +18,6 @@ export class WebNotificationProvider implements NotificationProvider {
       new Notification(title, { body: message });
       return;
     }
-    alert(`${title}\n${message}`);
+    await appAlert({ title, message });
   }
 }
