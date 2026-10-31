@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import SavedScaleModels from "../components/SavedScaleModels.vue";
 import { frameHex } from "../utils/framePresentation";
 import {
   defaultScaleConfig,
@@ -20,6 +21,8 @@ import {
   type ScaleSimulatorStatus,
 } from "../services/scaleSimulator";
 
+let preserveSavedSerialPort=false;
+function applySavedModel(config:ScaleSimulatorConfig){form.value={...defaultScaleConfig(),...config,id:null};preserveSavedSerialPort=true;void refreshPreview();}
 const loading = ref(false);
 const starting = ref(false);
 const error = ref("");
@@ -99,7 +102,7 @@ function portTypeLabel(portType: string): string {
 async function refreshSerialPorts() {
   try {
     serialPorts.value = await loadScaleSimulatorSerialPorts();
-    if (isSerialMode.value && serialPorts.value.length > 0 && !selectedSerialPortInfo.value) {
+    if (!preserveSavedSerialPort && isSerialMode.value && serialPorts.value.length > 0 && !selectedSerialPortInfo.value) {
       form.value.serial_port = serialPorts.value[0].port_name;
       await refreshPreview();
     }
@@ -171,6 +174,7 @@ function changeStopBits(event: Event) {
 }
 
 function applyPreset(preset: ScaleSimulatorPreset) {
+  preserveSavedSerialPort=false;
   form.value.driver = preset.driver;
   resetSerialDefaults();
   form.value.mode = preset.serial_mode
@@ -312,6 +316,7 @@ onUnmounted(() => {
           <button :disabled="starting" @click="start">{{ starting ? "Iniciando..." : "Iniciar" }}</button>
         </div>
 
+        <SavedScaleModels :config="form" @load="applySavedModel" />
         <div class="preset-list">
           <button v-for="preset in presets" :key="preset.key" class="preset-button" type="button" @click="applyPreset(preset)">
             <strong>{{ preset.name }}</strong>
@@ -359,6 +364,7 @@ onUnmounted(() => {
           <label v-if="isSerialMode">
             Porta serial RS232 detectada
             <select v-if="serialPorts.length > 0" v-model="form.serial_port" @change="refreshPreview">
+              <option v-if="form.serial_port && !serialPorts.some(port => port.port_name === form.serial_port)" :value="form.serial_port">{{form.serial_port}} (não disponível neste computador)</option>
               <option v-for="port in serialPorts" :key="port.port_name" :value="port.port_name">
                 {{ port.display_name }}{{ port.in_use_by_simulator ? " · em uso" : "" }}
               </option>
