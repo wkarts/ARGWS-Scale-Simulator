@@ -77,7 +77,9 @@ jobs:
           python-version: "3.13"
 
       - name: Validate project structure
-        run: python3 scripts/ci/validate-tauri-project.py --project . --mode static
+        run: |
+          python3 scripts/ci/validate-tauri-project.py --project . --mode static
+          python3 tests/test_scale_release_profile.py
 
   delivery-scripts:
     name: Delivery scripts

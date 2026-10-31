@@ -435,9 +435,33 @@ def validate_workflows(project: Path, findings: list[str]) -> None:
     if not release_workflow.is_file():
         return
     content = release_workflow.read_text(encoding="utf-8")
-    for marker in REQUIRED_RELEASE_MARKERS:
+    for marker in (SCALE_RELEASE_MARKERS if scale_release_profile(project) else REQUIRED_RELEASE_MARKERS):
         if marker not in content:
             findings.append(f"workflow de release não contém: {marker}")
+
+
+SCALE_RELEASE_PROFILE = {
+    "product": "scale-simulator", "mode": "desktop-web",
+    "stable_branch": "main", "prerelease_branch": "develop", "prerelease_channel": "beta",
+    "targets": ["x86_64-pc-windows-msvc", "i686-pc-windows-msvc", "x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin", "web", "sources"],
+    "mobile": "separate-workflows",
+}
+SCALE_RELEASE_MARKERS = (
+    "workflow_run:", "workflow_dispatch:", "contents: write", "cancel-in-progress: false",
+    "branches: [main, develop]", "needs: [prepare, desktop, web]",
+    "x86_64-pc-windows-msvc", "i686-pc-windows-msvc", "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin", "aarch64-apple-darwin", "CARGO_TARGET_DIR", "C:/scale-target",
+    "checksums.py", "upload-draft-assets.mjs", "asset.digest", "Digest mismatch", "--draft=false",
+)
+
+def scale_release_profile(project: Path) -> bool:
+    path = project / ".github/release-profile.json"
+    if not path.exists():
+        return False
+    profile = json.loads(path.read_text(encoding="utf-8"))
+    if profile != SCALE_RELEASE_PROFILE:
+        raise ValueError("Release profile must preserve the complete Scale desktop/Web matrix and beta channel.")
+    return True
 
 
 def validate_required_files(project: Path, findings: list[str]) -> None:
@@ -835,6 +859,10 @@ def validate_mobile_contract(
             *tuple(sorted(MOBILE_RELEASE_TARGETS)),
         ),
     }
+    if scale_release_profile(project):
+        # Keep every standalone mobile build/signing contract mandatory; the
+        # application's desktop release does not claim mobile assets.
+        workflow_contracts[release_workflow_path] = SCALE_RELEASE_MARKERS
     for path, markers in workflow_contracts.items():
         if not path.is_file():
             continue
