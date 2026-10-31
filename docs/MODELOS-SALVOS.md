@@ -1,10 +1,15 @@
 # Modelos salvos
-Na área de simulação, configure todos os parâmetros, informe um nome e use **Salvar como novo**. Pode haver vários modelos do mesmo driver. Os modelos são independentes dos presets originais.
 
-Selecione um modelo e use **Carregar**: somente o formulário é preenchido. Use o botão **Iniciar** existente quando desejar criar uma instância. Nenhuma instância já em execução é alterada, parada ou substituída.
+A área de simulação usa uma barra compacta: **Modelo**, **Carregar**, **Salvar…** e **⋯ Gerenciar**. Em espaços estreitos, os controles se distribuem em duas linhas sem rolagem horizontal.
 
-Para editar, carregue o modelo, ajuste o formulário e use **Atualizar selecionado**. **Salvar como novo** cria outra configuração. **Remover** pede confirmação e exclui somente o modelo. A revisão impede sobrescrever alterações de outra janela. Uma COM indisponível permanece visível; não é substituída silenciosamente.
+## Salvar ou atualizar
+Configure o formulário normalmente e clique em **Salvar…**. Na janela, informe o nome e escolha **Salvar como novo** ou **Atualizar selecionado**. Vários modelos podem usar o mesmo driver. Atualizar grava os valores atuais do formulário no modelo selecionado; não altera uma instância iniciada.
 
-Os modelos persistem no SQLite local, em tabela adicional, sem remover ou modificar tabelas existentes. Eles acompanham o backup do banco. Salvar/carregar não abre portas, não cria pares seriais nem instala drivers.
+## Carregar e editar
+Selecione um modelo e clique em **Carregar**. Somente o formulário muda. Edite seus parâmetros e use **Salvar… → Atualizar selecionado** quando desejar persistir a edição. Inicie uma nova instância pelo botão **Iniciar** existente, separadamente.
 
-Esta versão mantém o visual e os controles atuais. Playground e identidade V2 pertencem à migração futura, não a esta inclusão.
+## Gerenciar
+O botão **⋯** abre a lista e as ações menos frequentes: atualizar a lista, carregar/editar e remover. Remover exige confirmação e exclui somente o modelo. O campo de nome e as ações de manutenção não ficam ocupando o painel principal.
+
+## Preservação e dados
+Presets de fábrica e instâncias em execução não são alterados ao salvar, carregar ou remover. A COM salva indisponível continua identificada, sem troca silenciosa. Os modelos persistem no SQLite local, em tabela adicional, com revisão para impedir sobrescrita de alteração concorrente. Faça backup do banco antes de atualizar.
