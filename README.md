@@ -45,3 +45,6 @@ O preset 8540 aplica 4800/7E1, com opção 7E2 ou outras configurações explíc
 - [Configuração de runtime](docs/RUNTIME_CONFIGURATION.md)
 
 Identificadores de instalação, diretórios de dados, rotas, autenticação e recursos administrativos existentes foram mantidos. Documentação técnica antiga foi conservada para referência; algumas páginas históricas ainda descrevem a base original do projeto.
+
+## Modelos salvos
+Consulte [o guia](docs/MODELOS-SALVOS.md) para salvar, editar e carregar configurações sem alterar instâncias em execução.

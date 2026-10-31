@@ -1,6 +1,6 @@
 [package]
 name = "scale_simulator_tauri"
-version = "0.1.11"
+version = "0.2.0"
 description = "Simulador de balanças TCP e RS232"
 authors = ["Wallace Kleiton <wkarts@gmail.com>"]
 edition = "2021"

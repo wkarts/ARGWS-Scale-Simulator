@@ -108,7 +108,7 @@ jobs:
         run: |
           set -euo pipefail
           RUN_FULL="false"
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
+          if [ "${{ github.event_name }}" != "pull_request" ] || [ "${{ steps.changes.outputs.rust_changed }}" = "true" ]; then
             RUN_FULL="true"
           fi
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.full_rust_ci }}" = "true" ]; then

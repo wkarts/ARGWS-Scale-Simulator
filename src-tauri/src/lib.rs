@@ -26,6 +26,7 @@ mod commands {
     pub mod integrations;
     pub mod runtime;
     pub mod scale_simulator;
+    pub mod scale_models;
 }
 
 use app_state::SharedState;
@@ -145,6 +146,9 @@ pub fn run() {
             commands::runtime::tray_status,
             commands::runtime::tray_restore_window,
             commands::runtime::tray_exit_app,
+            commands::scale_models::scale_models_list,
+            commands::scale_models::scale_model_save,
+            commands::scale_models::scale_model_delete,
             commands::scale_simulator::scale_simulator_presets,
             commands::scale_simulator::scale_simulator_preview_frame,
             commands::scale_simulator::scale_simulator_start,

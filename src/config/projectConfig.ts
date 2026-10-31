@@ -12,7 +12,7 @@ export const projectConfig = {
     windowTitle: "Scale Simulator",
     subtitle: "Laboratório de pesagem • TCP / RS232",
     description: "Simulação de balanças e indicadores para testar integrações TCP e RS232.",
-    version: "0.1.11",
+    version: "0.2.0",
     mode: "desktop" as RuntimeMode,
     identifier: "br.com.wkarts.scale-simulator-tauri",
     developer: "Wallace Kleiton",
@@ -44,7 +44,7 @@ export const projectConfig = {
   defaultAdmin: {
     enabled: true,
     username: "admin",
-    password: "admin123",
+    password: "", // No credential is embedded in frontend metadata.
     forcePasswordChangeOnFirstLogin: true,
   },
   database: {
