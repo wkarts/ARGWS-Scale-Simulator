@@ -28,3 +28,8 @@ iOS 15 ou superior não expõe a enumeração serial IOKit de macOS. O build iOS
 
 ## Publicação beta: contrato do preflight
 O comando `ci:tauri` é mantido como contrato com o workflow Release da branch padrão, mesmo quando ele publica um SHA da develop. O CI executa esse mesmo gate antes do build; um teste lista os comandos npm de prepare para detectar ausência antes da publicação. Correção sem alteração de protocolo, persistência ou identidade. Artefatos anteriores de CI não são apagados. CI verde não implica instaladores desktop já produzidos: estes são gerados pela matriz Release após o preflight e ficam em draft com verificação de hash para retomada.
+
+
+### Integridade do prepare e retomada da mesma beta
+O prepare deriva branch/SHA do evento workflow_run validado, não da branch padrão onde o workflow está instalado. A develop exige sufixo beta e prerelease=true. O evento deve ser push aprovado do próprio repositório e coincidir com o checkout. Não se tenta sobrescrever variáveis reservadas GITHUB_*.
+A validação real de Cargo metadata mantém --locked e o grafo completo, descarta apenas stdout não utilizado (que ultrapassa1MiB) e preserva falhas, timeout e diagnóstico. O CI executa a preparação beta real em cópia isolada com Cargo verdadeiro, sem criar tag/commit/release. Um retry reutiliza a tag beta anotada somente quando Source coincide com o SHA exato; assets já enviados continuam verificados por hash, sem clobber. Nenhuma release estável é criada a partir de develop.
