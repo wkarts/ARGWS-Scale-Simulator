@@ -16,9 +16,9 @@ export interface MenuItemConfig {
 
 // Operational navigation is product-specific. Legacy administration routes remain intact.
 export const menuItems: MenuItemConfig[] = [
+  { title: "Visão geral", route: "/", permission: "dashboard:view", section: "dashboard" },
   { title: "Simulação", route: "/simulador-balancas", permission: "config:view", section: "ferramentas", description: "Configure protocolos, portas e instâncias de balanças TCP e RS232." },
   { title: "Playground", route: "/playground", permission: "config:manage", section: "ferramentas", description: "Inicie modelos salvos e controle cada balança." },
-  { title: "Visão geral", route: "/", permission: "dashboard:view", section: "ferramentas" },
   { title: "Parâmetros", desktopOnly: true, route: "/sistema", permission: "config:view", feature: "systemSettings", section: "sistema" },
   { title: "Usuários", route: "/usuarios", permission: "usuarios:view", section: "sistema" },
   { title: "Perfis de acesso", route: "/perfis", permission: "perfis:view", section: "sistema" },

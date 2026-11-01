@@ -267,7 +267,7 @@ onUnmounted(suspendPolling);
         <p class="eyebrow">Laboratório de pesagem • TCP / RS232</p>
         <h2>Simulação de balanças</h2>
         <p>
-          Configure o protocolo e a conexão TCP ou RS232, inicie uma instância e acompanhe o peso e os quadros transmitidos. Em testes seriais no mesmo computador, use um par de portas COM virtuais.
+          Configure TCP ou RS232, inicie uma instância e acompanhe o peso e os quadros transmitidos.
         </p>
       </div>
       <div class="scale-hero-actions">
@@ -321,7 +321,7 @@ onUnmounted(suspendPolling);
         </div>
 
         <SavedScaleModels :config="form" @load="applySavedModel" />
-        <details class="protocol-catalog" open>
+        <details class="protocol-catalog">
           <summary>Protocolos prontos <span>{{ presets.length }} opções</span></summary>
           <div class="preset-list">
           <button v-for="preset in presets" :key="preset.key" class="preset-button" type="button" @click="applyPreset(preset)">

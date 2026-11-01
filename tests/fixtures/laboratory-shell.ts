@@ -1,0 +1,14 @@
+import {createApp,h} from 'vue';
+import {createRouter,createMemoryHistory,RouterView} from 'vue-router';
+import AppLayout from '../../src/layouts/AppLayout.vue';
+import Simulation from '../../src/pages/ScaleSimulatorPage.vue';
+import Playground from '../../src/pages/PlaygroundPage.vue';
+import Guide from '../../src/pages/UserGuidePage.vue';
+import '../../src/styles.css';
+import '../../src/styles/scale-laboratory.css';
+import {applyVisualPreferences,defaultVisualPreferences} from '../../src/visual-core/theme';
+applyVisualPreferences(defaultVisualPreferences);
+const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',component:AppLayout,children:[{path:'',component:{render:()=>h('div','Visão geral')}},{path:'simulador-balancas',component:Simulation},{path:'playground',component:Playground},{path:'documentacao/guia',component:Guide}]}]});
+const app=createApp({render:()=>h(RouterView)});app.use(router);
+router.push('/simulador-balancas').then(()=>router.isReady()).then(()=>app.mount('#app'));
+(window as any).__go=(route:string)=>router.push(route);
