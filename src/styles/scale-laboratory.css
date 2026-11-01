@@ -101,3 +101,4 @@
 /* Hidden overflow still scrolls on focus; clip prevents ancestor focus scrolling. */
 .professional-shell,.professional-shell>.professional-main{overflow:clip}
 .professional-shell .professional-topbar{position:sticky;top:0;z-index:100;flex-shrink:0}
+#app:has(>.professional-shell){overflow:clip}

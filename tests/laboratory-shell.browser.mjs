@@ -43,6 +43,8 @@ try{
   const topbar=await page.locator('.professional-topbar').boundingBox();assert.ok(topbar.y>=0&&topbar.height>=58,'topbar stays fully visible after navigation settles');
   const viewportClipped=await page.locator('.professional-topbar button').evaluateAll(xs=>xs.filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&(r.top<0||r.bottom>innerHeight);}).map(e=>e.title));assert.deepEqual(viewportClipped,[]);
   if(screenshots)await page.screenshot({path:path.join(screenshots,`shell-playground-${width}x${height}.png`)});
+  assert.ok((await page.locator('.professional-topbar').boundingBox()).y>=0,'topbar remains visible after screenshot and layout settlement');
+  assert.equal(await page.locator('#app').evaluate(e=>e.scrollTop),0,'application host is not a focus-scroll container');
   await page.evaluate(()=>window.__go('/documentacao/guia'));await page.locator('.scale-guide-page').waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   if(screenshots)await page.screenshot({path:path.join(screenshots,`shell-guide-${width}x${height}.png`)});
   assert.deepEqual(errors,[]);console.log(JSON.stringify({width,height,fullProductionShell:true,realVuePages:true,syntheticServices:true,densityChecked:true}));await page.close();
