@@ -17,10 +17,11 @@ try{
   await page.route('**/*',r=>{const u=new URL(r.request().url());return u.port===String(server.httpServer.address().port)?r.continue():r.abort();});
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/fixtures/laboratory-shell.html`);
   await page.locator('.scale-simulator-page').waitFor();await page.evaluate(()=>document.fonts.ready);
+  if(process.env.SCALE_UI_SCREENSHOTS){fs.mkdirSync(process.env.SCALE_UI_SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.SCALE_UI_SCREENSHOTS,`shell-initial-${width}x${height}.png`)});}
   assert.equal(await page.locator('.professional-menu-links a.menu-item-current').count(),1,'only current route is highlighted');
   const overview=page.locator('.professional-menu-links a[href="/"]');
-  assert.match(await overview.locator('xpath=ancestor::*[contains(@class,"menu-group")][1]').innerText(),/Principal/);
-  assert.doesNotMatch(await overview.locator('xpath=ancestor::*[contains(@class,"menu-group")][1]').innerText(),/Laboratório/);
+  assert.match(await overview.locator('xpath=ancestor::*[contains(@class,"menu-group")][1]').innerText(),/Principal/i);
+  assert.doesNotMatch(await overview.locator('xpath=ancestor::*[contains(@class,"menu-group")][1]').innerText(),/Laboratório/i);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'shell must fit '+width);
   const hero=page.locator('.scale-simulator-page .dashboard-hero');
   assert.ok(await hero.locator('h2').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))<=22,'compact heading');
