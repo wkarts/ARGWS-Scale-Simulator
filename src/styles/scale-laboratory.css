@@ -84,3 +84,5 @@
 @media(max-height:760px) and (min-width:800px){.scale-simulator-page.scale-simulator-page .dashboard-hero{padding:10px 14px}.scale-simulator-page.scale-simulator-page .scale-metric-card{padding:8px 10px;min-height:50px}.workspace-content-area :is(.scale-playground-page,.scale-guide-page)>.page-header-card{padding:10px 12px!important}.scale-playground-page.scale-playground-page .weight{font-size:30px;padding:10px 12px}.scale-playground-page.scale-playground-page .playground-launch{padding:10px}}
 
 .scale-guide-page{container-type:inline-size;min-width:0;max-width:100%}
+
+@container (min-width:640px) and (max-width:900px){.scale-simulator-page.scale-simulator-page .dashboard-hero{flex-direction:row;align-items:center;gap:12px}.scale-simulator-page.scale-simulator-page .scale-hero-actions{flex-direction:column;align-items:stretch;max-width:140px;gap:5px}.scale-simulator-page .scale-hero-actions button{padding:6px 10px;min-height:30px}}

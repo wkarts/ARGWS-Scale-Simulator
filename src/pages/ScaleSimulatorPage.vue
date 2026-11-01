@@ -267,7 +267,7 @@ onUnmounted(suspendPolling);
         <p class="eyebrow">Laboratório de pesagem • TCP / RS232</p>
         <h2>Simulação de balanças</h2>
         <p>
-          Configure o protocolo e a conexão TCP ou RS232, inicie uma instância e acompanhe o peso e os quadros transmitidos. Em testes seriais no mesmo computador, use um par de portas COM virtuais.
+          Configure TCP ou RS232, inicie uma instância e acompanhe o peso e os quadros transmitidos.
         </p>
       </div>
       <div class="scale-hero-actions">
