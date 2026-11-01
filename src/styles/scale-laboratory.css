@@ -98,3 +98,6 @@
 .professional-shell>.professional-main{height:100%;min-height:0!important;display:flex;flex-direction:column;overflow:hidden}
 .professional-shell .professional-topbar,.professional-shell .workspace-tabs-bar{flex:0 0 auto}
 .professional-shell .workspace-content-area{flex:1 1 auto;min-height:0!important;height:auto!important;overflow-y:auto!important;overscroll-behavior:contain}
+/* Hidden overflow still scrolls on focus; clip prevents ancestor focus scrolling. */
+.professional-shell,.professional-shell>.professional-main{overflow:clip}
+.professional-shell .professional-topbar{position:sticky;top:0;z-index:100;flex-shrink:0}
