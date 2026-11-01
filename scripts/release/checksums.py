@@ -1,6 +1,7 @@
-import hashlib, json, os, pathlib, subprocess
+import hashlib, json, os, pathlib, re, subprocess
 root = pathlib.Path('release-assets')
-files = sorted(f for f in root.iterdir() if f.is_file() and f.name not in {'SHA256SUMS.txt', 'RELEASE-MANIFEST.json'})
+archived = [f for f in root.iterdir() if f.is_file() and re.match(r'^previous-[a-f0-9]{40}-', f.name)]
+files = sorted(f for f in root.iterdir() if f.is_file() and f not in archived and f.name not in {'SHA256SUMS.txt', 'RELEASE-MANIFEST.json'})
 version = os.environ['RELEASE_VERSION']
 required = {
     'x86_64-pc-windows-msvc': ['.exe', '.msi'],
@@ -23,3 +24,8 @@ manifest = {'product': 'Scale Simulator', 'version': os.environ['RELEASE_VERSION
 (root/'RELEASE-MANIFEST.json').write_text(json.dumps(manifest,indent=2)+'\n')
 assets.append({'name':'RELEASE-MANIFEST.json','sha256':hashlib.sha256((root/'RELEASE-MANIFEST.json').read_bytes()).hexdigest()})
 (root/'SHA256SUMS.txt').write_text(''.join(f"{a['sha256']}  {a['name']}\n" for a in assets))
+
+# Older main workflow definitions download all draft files; keep only current bundles
+# in this disposable runner directory. Remote backups remain until final verification.
+for previous in archived:
+    previous.unlink()

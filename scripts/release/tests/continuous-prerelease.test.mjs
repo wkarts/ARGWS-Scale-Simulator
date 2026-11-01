@@ -18,7 +18,9 @@ test('previous bytes are renamed in draft before leased tag update, never delete
 test('publication collects only current generation and verifies remote hashes before archive deletion',()=>{
  const workflow=fs.readFileSync('.github/workflows/release.yml','utf8'),finalize=fs.readFileSync('scripts/release/finalize-continuous.mjs','utf8');
  assert.match(workflow,/--pattern "Scale-Simulator-\*"/);
- assert(workflow.indexOf('node scripts/release/finalize-continuous.mjs')<workflow.indexOf('gh release edit "$TAG" --draft=false --prerelease --latest=false'));
+ const upload=fs.readFileSync('scripts/release/upload-draft-assets.mjs','utf8');
+ assert.match(upload,/await import\('\.\/finalize-continuous.mjs'\)/);
+ assert.match(upload,/state.isPrerelease/);
  assert(finalize.indexOf('remote.digest')<finalize.indexOf("'DELETE'"));
  assert.match(finalize,/manifest.commit!==head/);
  assert.match(finalize,/release.draft/);
@@ -40,6 +42,7 @@ test('release manifest requires every installer format and excludes mixed genera
   assert.equal(execute().status,0);
   fs.unlinkSync(path.join(output,names[0]));assert.notEqual(execute().status,0);
   fs.writeFileSync(path.join(output,names[0]),'synthetic bundle');
-  fs.writeFileSync(path.join(output,'previous-'+base.oldRef+'-old.exe'),'old');assert.notEqual(execute().status,0);
+  const archived=path.join(output,'previous-'+base.oldRef+'-old.exe');fs.writeFileSync(archived,'old');assert.equal(execute().status,0);assert.equal(fs.existsSync(archived),false);
+  fs.writeFileSync(path.join(output,'Scale-Simulator-0.2.1-web.zip'),'wrong version');assert.notEqual(execute().status,0);
  } finally {fs.rmSync(root,{recursive:true,force:true});}
 });

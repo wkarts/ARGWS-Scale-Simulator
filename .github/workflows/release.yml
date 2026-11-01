@@ -259,7 +259,6 @@ jobs:
           fi
           RELEASE_TAG="$TAG" node scripts/release/upload-draft-assets.mjs
           if [ "$PRERELEASE" = "true" ]; then
-            node scripts/release/finalize-continuous.mjs
             gh release edit "$TAG" --draft=false --prerelease --latest=false
           else
             gh release edit "$TAG" --draft=false --prerelease=false --latest
