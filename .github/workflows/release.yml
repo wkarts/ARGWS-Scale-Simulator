@@ -38,7 +38,7 @@ jobs:
       - id: prepare
         env:
           GH_TOKEN: ${{ github.token }}
-          GITHUB_REF_NAME: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          RELEASE_SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: node scripts/release/prepare-ci.mjs
   desktop:
     permissions:

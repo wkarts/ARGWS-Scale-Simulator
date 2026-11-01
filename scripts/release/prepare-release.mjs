@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { validateCargoMetadata } from './cargo-metadata.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -86,5 +86,4 @@ fs.writeFileSync(lockPath, blocks.join('[[package]]'));
 const brandFile = path.join(root, 'src/assets/branding/brand.json');
 if (fs.existsSync(brandFile)) { const brand=JSON.parse(fs.readFileSync(brandFile,'utf8')); brand.version=version; fs.writeFileSync(brandFile,JSON.stringify(brand,null,2)+'\n'); }
 
-const cargoCheck=spawnSync(process.env.CARGO||'cargo',['metadata','--manifest-path','src-tauri/Cargo.toml','--locked','--format-version','1'],{cwd:root,encoding:'utf8'});
-if(cargoCheck.status!==0)throw new Error(`Cargo.lock inconsistente: ${cargoCheck.stderr||cargoCheck.error||cargoCheck.status}`);
+validateCargoMetadata(root);

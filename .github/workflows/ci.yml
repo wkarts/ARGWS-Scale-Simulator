@@ -112,6 +112,12 @@ jobs:
 
       - name: Test release pipeline
         run: node --test scripts/release/tests/*.test.mjs
+      - name: Setup Rust for real release metadata validation
+        uses: dtolnay/rust-toolchain@stable
+      - name: Dry-run actual beta preparation without publishing
+        run: |
+          node scripts/release/check-beta-prepare.mjs
+          node scripts/release/check-source-pipeline.mjs
 
   windows-build-script:
     name: Windows build script

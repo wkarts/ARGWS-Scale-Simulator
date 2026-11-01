@@ -1,10 +1,22 @@
 import fs from 'node:fs';
 import { execFileSync as run } from 'node:child_process';
-import { planVersion } from './version-plan.mjs';
+import { releaseSource, planForSource } from './source-plan.mjs';
 const git = (...args) => run('git', args, { encoding: 'utf8' }).trim();
-const branch = process.env.GITHUB_REF_NAME;
-const p = planVersion(branch, JSON.parse(fs.readFileSync('package.json')).version, git('tag','--list').split('\n'));
 const source = git('rev-parse','HEAD');
+const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+const { branch } = releaseSource(process.env, event, source);
+const tags = git('tag','--list').split('\n').filter(Boolean);
+const annotations = {};
+for (const tag of tags.filter(tag => /^v\d+\.\d+\.\d+-beta\.\d+$/.test(tag))) {
+  const type = git('cat-file','-t',`refs/tags/${tag}`);
+  const parent = type === 'tag' ? (git('rev-list','--parents','-n','1',tag).split(' ')[1] || '') : '';
+  const metadata = new Set(['VERSION','package.json','package-lock.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','src-tauri/tauri.conf.json','src/config/projectConfig.ts','src/assets/branding/brand.json']);
+  const metadataOnly = parent === source && git('diff','--name-only',source,tag).split('\n').filter(Boolean).every(file => metadata.has(file));
+  annotations[tag] = { type, parent, metadataOnly, message: type === 'tag' ? git('tag','-l',tag,'--format=%(contents)') : '' };
+}
+const p = planForSource(branch, JSON.parse(fs.readFileSync('package.json')).version, tags, source, annotations);
+if (branch === 'develop' && (!p.prerelease || !/-beta\.\d+$/.test(p.version))) throw new Error('Develop can publish beta only');
+console.log(`Verified source ${branch}@${source}; target ${p.tag}; prerelease=${p.prerelease}`);
 if (p.existing) {
   // Never move or overwrite a published tag; a dispatch can retry its exact build.
   console.log(`Reusing immutable ${p.tag}`);
