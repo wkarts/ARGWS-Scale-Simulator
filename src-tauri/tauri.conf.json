@@ -52,6 +52,9 @@
     },
     "resources": [
       "dist/**/*"
-    ]
+    ],
+    "publisher": "WK Arts",
+    "shortDescription": "Simulador de balanças TCP e RS232",
+    "longDescription": "Laboratório de pesagem com múltiplas instâncias e nove modelos de indicadores para testar integrações."
   }
 }

@@ -1,0 +1,16 @@
+{
+  "name": "Scale Signal",
+  "defaultMode": "light",
+  "font": "DejaVu Sans",
+  "colors": {
+    "primary": "#102E49",
+    "accent": "#13B89D",
+    "secondaryText": "#65758A",
+    "background": "#F3F6FA",
+    "surface": "#FFFFFF",
+    "secondary": "#176B87"
+  },
+  "accessibleAccentText": "#087F6D",
+  "note": "Use dark teal for text on white; green signal is for marks and decorative emphasis.",
+  "identity": "Approved scale evolution V2"
+}

@@ -1,0 +1,14 @@
+import {defaultScaleConfig} from '../../src/services/scaleSimulator';
+export {defaultScaleConfig};
+const w=window as any;w.__runtimeCalls=[];
+let rows=[{id:'existing',name:'Bancada principal',driver:'wt1000n',mode:'serial_continuous',serial_port:'COM10',baud_rate:9600,host:'0.0.0.0',port:4001,clients:1,weight_kg:1234,gross_kg:1234,tare_kg:0,net_kg:1234,stable:true,running:true,last_frame:'0,1234,0,1234\r\n',started_at:new Date().toISOString()}];
+export const listScaleSimulators=async()=>structuredClone(rows);
+export const loadScaleSimulatorLogs=async()=>[{at:new Date().toISOString(),level:'info',message:'Quadro transmitido na bancada de teste'}];
+export const loadScaleSimulatorSerialPorts=async()=>[{port_name:'COM10',display_name:'COM10 • USB Serial',port_type:'usb',in_use_by_simulator:true}];
+export const loadScaleSimulatorPresets=async()=>Array.from({length:9},(_,i)=>({key:'preset-'+i,name:'Indicador de pesagem '+(i+1),description:'Protocolo de teste com peso bruto, tara e líquido. Comunicação contínua para integração com o ADP.',driver:'wt1000n',default_port:4001+i,default_serial_port:'COM10',default_baud_rate:9600,command_mode:false,serial_mode:true,sample_frame:'0,1234,0,1234',adp_equipment:'WT1000N'}));
+export const previewScaleSimulatorFrame=async()=> '0,1234,0,1234\r\n';
+export const startScaleSimulator=async(config:any)=>{w.__runtimeCalls.push('start');rows.push({...rows[0],id:'created',name:config.name});return rows.at(-1);};
+export const stopScaleSimulator=async(id:string)=>{w.__runtimeCalls.push('stop');rows=rows.filter(r=>r.id!==id);};
+export const stopAllScaleSimulators=async()=>{w.__runtimeCalls.push('stopAll');rows=[];};
+export const setScaleSimulatorWeight=async(id:string,weight:number)=>{w.__runtimeCalls.push('weight');const row=rows.find(r=>r.id===id);if(row)row.gross_kg=row.net_kg=row.weight_kg=weight;};
+export const executeScaleSimulatorAction=async()=>{w.__runtimeCalls.push('action');return {message:'ok'};};

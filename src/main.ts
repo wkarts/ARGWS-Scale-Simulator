@@ -4,6 +4,7 @@ import App from "./App.vue";
 import { registerServiceWorker } from "./core/pwa/registerServiceWorker";
 import router from "./router";
 import "./styles.css";
+import "./styles/scale-laboratory.css";
 import { useSessionStore } from "./stores/session";
 import { logAppError, logAppInfo } from "./services/logger";
 import { showSplashError, showSplashWarning } from "./services/splash";
