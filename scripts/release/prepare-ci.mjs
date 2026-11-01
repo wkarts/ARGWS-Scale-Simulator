@@ -7,15 +7,27 @@ const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'))
 const { branch } = releaseSource(process.env, event, source);
 const tags = git('tag','--list').split('\n').filter(Boolean);
 const annotations = {};
-for (const tag of tags.filter(tag => /^v\d+\.\d+\.\d+-beta\.\d+$/.test(tag))) {
+for (const tag of tags.filter(tag => /^v\d+\.\d+\.\d+$/.test(tag))) {
   const type = git('cat-file','-t',`refs/tags/${tag}`);
   const parent = type === 'tag' ? (git('rev-list','--parents','-n','1',tag).split(' ')[1] || '') : '';
   const metadata = new Set(['VERSION','package.json','package-lock.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','src-tauri/tauri.conf.json','src/config/projectConfig.ts','src/assets/branding/brand.json']);
-  const metadataOnly = parent === source && git('diff','--name-only',source,tag).split('\n').filter(Boolean).every(file => metadata.has(file));
-  annotations[tag] = { type, parent, metadataOnly, message: type === 'tag' ? git('tag','-l',tag,'--format=%(contents)') : '' };
+  const commit = git('rev-parse',`${tag}^{commit}`);
+  const metadataOnly = (parent === source || commit === source) && git('diff','--name-only',source,tag).split('\n').filter(Boolean).every(file => metadata.has(file));
+  annotations[tag] = { type, parent, commit, metadataOnly, message: type === 'tag' ? git('tag','-l',tag,'--format=%(contents)') : '' };
 }
-const p = planForSource(branch, JSON.parse(fs.readFileSync('package.json')).version, tags, source, annotations);
-if (branch === 'develop' && (!p.prerelease || !/-beta\.\d+$/.test(p.version))) throw new Error('Develop can publish beta only');
+const resume = process.env.RELEASE_RESUME_TAG || '';
+let p;
+if (resume) {
+  if (process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || branch !== 'develop' || !/^v\d+\.\d+\.\d+$/.test(resume) || !tags.includes(resume)) throw new Error('Resume requires an existing numeric tag and an explicit develop dispatch');
+  const version = JSON.parse(git('show',`${resume}:package.json`)).version;
+  if (`v${version}` !== resume) throw new Error('Resume tag/version mismatch');
+  const release = JSON.parse(run('gh',['release','view',resume,'--json','isDraft,isPrerelease'],{encoding:'utf8'}));
+  if (!release.isDraft || !release.isPrerelease) throw new Error('Resume accepts only an existing draft pre-release');
+  p = {tag: resume, version, prerelease: true, existing: true};
+} else {
+  p = planForSource(branch, JSON.parse(fs.readFileSync('package.json')).version, tags, source, annotations);
+}
+if (branch === 'develop' && !p.prerelease) throw new Error('Develop must remain a GitHub pre-release');
 console.log(`Verified source ${branch}@${source}; target ${p.tag}; prerelease=${p.prerelease}`);
 if (p.existing) {
   // Never move or overwrite a published tag; a dispatch can retry its exact build.

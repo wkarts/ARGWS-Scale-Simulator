@@ -1,4 +1,4 @@
-import { planVersion, compare, parseVersion } from './version-plan.mjs';
+import { planVersion } from './version-plan.mjs';
 export function releaseSource(env, event, checkedOutSha) {
   let branch, sha;
   if (env.GITHUB_EVENT_NAME === 'workflow_run') {
@@ -13,13 +13,12 @@ export function releaseSource(env, event, checkedOutSha) {
   return { branch, sha };
 }
 export function planForSource(branch, current, tags, source, annotations) {
-  const next = planVersion(branch, current, tags);
-  if (branch !== 'develop') return next;
-  const base = parseVersion(next.version).base.join('.');
-  const matching = tags.filter(tag => tag.startsWith(`v${base}-beta.`) && annotations[tag]?.type === 'tag' && annotations[tag].parent === source && annotations[tag].metadataOnly === true
-    && annotations[tag].message.split('\n').filter(line => line.startsWith('Source: ')).length === 1
-    && annotations[tag].message.split('\n').includes(`Source: ${source}`)).sort(compare);
-  if (!matching.length) return next;
-  const tag = matching.at(-1);
-  return { tag, version: tag.slice(1), prerelease: true, existing: true };
+  const plan = planVersion(branch, current, tags);
+  if (!plan.existing) return plan;
+  const a = annotations[plan.tag];
+  const exact = a?.type === 'tag' && a.metadataOnly === true && (a.commit === source || a.parent === source)
+    && a.message.split('\n').filter(line => line.startsWith('Source: ')).length === 1
+    && a.message.split('\n').includes(`Source: ${source}`);
+  if (!exact) throw new Error(`Immutable ${plan.tag} belongs to another source; explicitly resume the existing release instead of moving its tag`);
+  return plan;
 }
