@@ -23,6 +23,7 @@ try{
   assert.match(await overview.locator('xpath=ancestor::*[contains(@class,"menu-group")][1]').innerText(),/Principal/i);
   assert.doesNotMatch(await overview.locator('xpath=ancestor::*[contains(@class,"menu-group")][1]').innerText(),/Laboratório/i);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'shell must fit '+width);
+  const displaced=await page.locator('.professional-topbar button').evaluateAll(xs=>xs.filter(e=>{const r=e.getBoundingClientRect(),h=e.closest('header').getBoundingClientRect();return r.width>0&&(r.top<h.top-1||r.bottom>h.bottom+1);}).map(e=>e.title));assert.deepEqual(displaced,[],'topbar controls must not overlap page content');
   const hero=page.locator('.scale-simulator-page .dashboard-hero');
   assert.ok(await hero.locator('h2').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))<=22,'compact heading');
   if(width>=1024)assert.ok((await hero.boundingBox()).height<=130,'short-window hero density');
