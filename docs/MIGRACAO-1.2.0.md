@@ -25,3 +25,6 @@ Antes de testar, faça backup do banco e da configuração. Não exclua o banco 
 
 ## Limite específico de iOS
 iOS 15 ou superior não expõe a enumeração serial IOKit de macOS. O build iOS não incorpora essa dependência; operações RS232 locais falham explicitamente antes de criar uma instância. Para serial, use o backend desktop autenticado. Windows/Linux/macOS mantêm o código serial original. TCP e controles remotos continuam disponíveis.
+
+## Publicação beta: contrato do preflight
+O comando `ci:tauri` é mantido como contrato com o workflow Release da branch padrão, mesmo quando ele publica um SHA da develop. O CI executa esse mesmo gate antes do build; um teste lista os comandos npm de prepare para detectar ausência antes da publicação. Correção sem alteração de protocolo, persistência ou identidade. Artefatos anteriores de CI não são apagados. CI verde não implica instaladores desktop já produzidos: estes são gerados pela matriz Release após o preflight e ficam em draft com verificação de hash para retomada.
