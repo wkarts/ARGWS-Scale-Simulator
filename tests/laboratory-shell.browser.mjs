@@ -37,6 +37,8 @@ try{
   if(width>=1300)assert.ok((await page.locator('.playground-scale').first().boundingBox()).width<650,'one instance does not stretch across entire workspace');
   assert.deepEqual(await page.locator('.playground-controls button').evaluateAll(xs=>xs.filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&(r.left<0||r.right>innerWidth+1);}).map(e=>e.textContent)),[]);
   assert.deepEqual(await page.evaluate(()=>window.__runtimeCalls),[],'navigation does not change running instances');
+  assert.ok((await page.locator('.professional-topbar').boundingBox()).y>=0,'focus and route navigation must not scroll the header offscreen');
+  assert.equal(await page.evaluate(()=>window.scrollY),0,'scroll stays in workspace');
   if(screenshots)await page.screenshot({path:path.join(screenshots,`shell-playground-${width}x${height}.png`)});
   await page.evaluate(()=>window.__go('/documentacao/guia'));await page.locator('.scale-guide-page').waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   if(screenshots)await page.screenshot({path:path.join(screenshots,`shell-guide-${width}x${height}.png`)});
