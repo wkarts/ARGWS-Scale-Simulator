@@ -156,7 +156,7 @@ jobs:
         run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Validate version synchronization
-        run: npm run ci:version
+        run: npm run ci:version && npm run ci:tauri
 
       - name: Typecheck
         run: npm run typecheck

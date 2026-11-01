@@ -68,7 +68,8 @@
     "build:windows:project-target": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/windows/build-windows.ps1 -UseProjectCargoTarget",
     "build:windows:short-target": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/windows/build-windows.ps1",
     "build:windows:ci-fast": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/windows/build-windows.ps1 -SkipRustChecks -InstallMode Ci",
-    "test:models:browser": "node tests/saved-models.browser.mjs"
+    "test:models:browser": "node tests/saved-models.browser.mjs",
+    "ci:tauri": "node ./scripts/ci/check-tauri-versions.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",
