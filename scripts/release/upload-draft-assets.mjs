@@ -23,3 +23,10 @@ for (const name of fs.readdirSync('release-assets').sort()) {
     gh('release','upload',tag,file); // Never use --clobber.
   }
 }
+
+// workflow_run uses the default branch workflow definition. Finish through this
+// checked-out source script as well, so an older workflow can safely publish it.
+if (release.isDraft && fs.existsSync('release-assets/RELEASE-MANIFEST.json') && fs.existsSync('release-assets/SHA256SUMS.txt')) {
+  const state=JSON.parse(gh('release','view',tag,'--json','isPrerelease'));
+  if (state.isPrerelease) { process.env.TAG=tag; await import('./finalize-continuous.mjs'); }
+}

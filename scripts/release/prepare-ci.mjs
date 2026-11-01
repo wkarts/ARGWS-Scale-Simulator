@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { replaceContinuous } from './continuous-prerelease.mjs';
 import { execFileSync as run } from 'node:child_process';
 import { releaseSource, planForSource } from './source-plan.mjs';
 const git = (...args) => run('git', args, { encoding: 'utf8' }).trim();
@@ -25,13 +26,24 @@ if (resume) {
   if (!release.isDraft || !release.isPrerelease) throw new Error('Resume accepts only an existing draft pre-release');
   p = {tag: resume, version, prerelease: true, existing: true};
 } else {
-  p = planForSource(branch, JSON.parse(fs.readFileSync('package.json')).version, tags, source, annotations);
+  const version = JSON.parse(fs.readFileSync('package.json')).version;
+  try { p = planForSource(branch, version, tags, source, annotations); }
+  catch (error) {
+    if (branch !== 'develop' || !String(error.message).startsWith('Immutable ')) throw error;
+    const tag = `v${version}`, annotation = annotations[tag];
+    const markers = (annotation?.message || '').split('\n').filter(line=>line.startsWith('Source: '));
+    if (annotation?.type !== 'tag' || markers.length !== 1) throw error;
+    const previousSource = markers[0].slice(8);
+    let isAncestor = false;
+    try { git('merge-base','--is-ancestor',previousSource,source); isAncestor = true; } catch {}
+    p = replaceContinuous({branch,version,source,previousSource,oldRef:git('rev-parse',`refs/tags/${tag}`),isAncestor});
+  }
 }
 if (branch === 'develop' && !p.prerelease) throw new Error('Develop must remain a GitHub pre-release');
 console.log(`Verified source ${branch}@${source}; target ${p.tag}; prerelease=${p.prerelease}`);
 if (p.existing) {
-  // Never move or overwrite a published tag; a dispatch can retry its exact build.
-  console.log(`Reusing immutable ${p.tag}`);
+  // Same-source retries reuse only the current draft generation.
+  console.log(`Using verified ${p.tag}`);
 } else {
   run(process.execPath,['scripts/release/prepare-release.mjs',p.version],{stdio:'inherit'});
   run(process.execPath,['scripts/ci/check-version-sync.mjs','--tag',p.tag],{stdio:'inherit'});
