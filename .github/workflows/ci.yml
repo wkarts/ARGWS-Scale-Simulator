@@ -205,8 +205,18 @@ jobs:
       - name: Install component-test browser
         run: npx playwright install --with-deps chromium
       - name: Compact model controls at desktop/mobile widths
-        run: npm run test:models:browser
+        run: |
+          npm run test:models:browser
+          SCALE_UI_SCREENSHOTS=/tmp/scale-ui-evidence node tests/laboratory.browser.mjs
 
+      - name: Preserve laboratory visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scale-laboratory-ui
+          path: /tmp/scale-ui-evidence
+          retention-days: 1
+          if-no-files-found: ignore
       - name: Store Web/PWA for dependent checks outside pull requests
         if: github.event_name != 'pull_request'
         continue-on-error: true

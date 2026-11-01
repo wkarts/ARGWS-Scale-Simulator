@@ -123,6 +123,8 @@ function iconNameForRoute(routePath: string): string {
   const normalized = canonicalTabKey(routePath);
   const icons: Record<string, string> = {
     "/": "home",
+    "/simulador-balancas": "scale",
+    "/playground": "activity",
     "/empresas": "building",
     "/departamentos": "department",
     "/funcoes": "briefcase",
@@ -190,18 +192,24 @@ const savedMenuState = readMenuState();
 const groupState = reactive<Record<MenuSection, boolean>>({
   dashboard: savedMenuState?.dashboard ?? true,
   cadastro: savedMenuState?.cadastro ?? true,
-  sistema: savedMenuState?.sistema ?? true,
-  ferramentas: savedMenuState?.ferramentas ?? false,
+  sistema: savedMenuState?.sistema ?? false,
+  ferramentas: true,
   documentacao: savedMenuState?.documentacao ?? false,
 });
 
 const sections: { key: MenuSection; title: string; subtitle: string }[] = [
-  { key: "dashboard", title: "Dashboard", subtitle: "visão geral" },
-  { key: "cadastro", title: "Cadastro", subtitle: "dados base" },
-  { key: "sistema", title: "Sistema", subtitle: "segurança e parâmetros" },
-  { key: "ferramentas", title: "Ferramentas", subtitle: "runtime e integrações" },
-  { key: "documentacao", title: "Documentação", subtitle: "apoio ao usuário" },
+  { key: "ferramentas", title: "Laboratório", subtitle: "pesagem TCP / RS232" },
+  { key: "sistema", title: "Configurações", subtitle: "acesso e ambiente" },
+  { key: "documentacao", title: "Ajuda", subtitle: "orientações e diagnóstico" },
 ];
+const administrationContext = computed(() => /^\/(empresas|usuarios|perfis|sistema)(\/|$)/.test(route.path));
+const contentRef = ref<HTMLElement | null>(null);
+const tabScrollPositions = new Map<string, number>();
+watch(() => route.fullPath, async (next, previous) => {
+  if (previous && contentRef.value) tabScrollPositions.set(previous, contentRef.value.scrollTop);
+  await nextTick();
+  if (route.fullPath === next && contentRef.value) contentRef.value.scrollTop = tabScrollPositions.get(next) ?? 0;
+}, { flush: "pre" });
 
 const menuBySection = computed(() => {
   const items = visibleMenuItems().filter((item) => !item.permission || session.can(item.permission));
@@ -625,7 +633,7 @@ function dashboardTab(): WorkspaceTab {
     key: "/",
     route: "/",
     fullPath: "/",
-    title: "Dashboard",
+    title: "Visão geral",
     eyebrow: "Visão geral",
     description: "Resumo operacional.",
     pinned: true,
@@ -911,7 +919,7 @@ onBeforeUnmount(() => {
 
       <div class="sidebar-footer-fixed professional-sidebar-footer">
         <div v-if="isMobileViewport" class="mobile-sidebar-context">
-          <label class="sidebar-company-selector">
+          <label v-if="administrationContext" class="sidebar-company-selector">
             <span>Empresa ativa</span>
             <select :value="session.activeCompanyId ?? ''" @change="session.setActiveCompany(Number(($event.target as HTMLSelectElement).value) || null)">
               <option v-if="session.isMaster" value="">Todas / geral</option>
@@ -949,13 +957,13 @@ onBeforeUnmount(() => {
             <IconSymbol name="menu" :size="18" />
           </button>
           <div class="global-search-wrap">
-            <label class="global-search-box" title="Buscar páginas e módulos do sistema">
+            <label class="global-search-box" title="Buscar no Scale Simulator">
               <IconSymbol name="search" :size="15" />
               <input
                 ref="globalSearchInputRef"
                 v-model="globalSearch"
                 type="search"
-                placeholder="Buscar páginas, módulos e rotas... (Ctrl + K)"
+                placeholder="Buscar no laboratório... (Ctrl + K)"
                 @focus="globalSearchFocused = true"
                 @keydown="handleGlobalSearchKeydown"
               />
@@ -977,7 +985,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="topbar-right professional-topbar-right">
-          <label class="company-selector topbar-company-selector">
+          <label v-if="administrationContext" class="company-selector topbar-company-selector">
             <span>Empresa ativa</span>
             <select :value="session.activeCompanyId ?? ''" @change="session.setActiveCompany(Number(($event.target as HTMLSelectElement).value) || null)">
               <option v-if="session.isMaster" value="">Todas / geral</option>
@@ -987,7 +995,7 @@ onBeforeUnmount(() => {
             </select>
           </label>
 
-          <div class="topbar-services" title="Status dos serviços publicados">
+          <div v-if="administrationContext" class="topbar-services" title="Status dos serviços publicados">
             <RouterLink
               v-for="service in serviceStatuses"
               :key="service.key"
@@ -1104,7 +1112,7 @@ onBeforeUnmount(() => {
               <span v-if="tab.pinned" class="workspace-tab-pin"><IconSymbol name="home" :size="12" /></span>
               <span v-else class="workspace-tab-close" role="button" aria-label="Fechar guia" @click="closeTab(tab, $event)"><IconSymbol name="close" :size="12" /></span>
             </button>
-            <button type="button" class="workspace-tab-add" title="Abrir Dashboard em uma guia" @click="openDashboardTab"><IconSymbol name="plus" :size="15" /></button>
+            <button type="button" class="workspace-tab-add" title="Abrir visão geral em uma guia" @click="openDashboardTab"><IconSymbol name="plus" :size="15" /></button>
           </div>
         </div>
 
@@ -1120,7 +1128,7 @@ onBeforeUnmount(() => {
         </button>
       </section>
 
-      <main class="content-area workspace-content-area professional-content-area">
+      <main ref="contentRef" class="content-area workspace-content-area professional-content-area">
         <RouterView v-slot="{ Component }">
           <KeepAlive v-if="showWorkspaceTabs" :max="workspaceConfig.maxTabs">
             <component :is="Component" :key="`${route.fullPath}:${refreshToken}`" />

@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
 
 const paths: Record<string, string> = {
   circle: "M12 12h.01",
+  scale: "M4 9h16v12H4V9ZM7 3h10l3 6H4l3-6ZM8 12h8v5H8v-5ZM10 19h4",
   menu: "M4 6h16M4 12h16M4 18h16",
   search: "M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z",
   refresh: "M20 6v5h-5M4 18v-5h5M5.6 9A7 7 0 0 1 18 6.8L20 11M4 13l2 4.2A7 7 0 0 0 18.4 15",

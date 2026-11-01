@@ -264,10 +264,10 @@ onUnmounted(suspendPolling);
   <div class="page-content-scroll scale-simulator-page">
     <div class="hero-card dashboard-hero">
       <div>
-        <p class="eyebrow">Simulador > Balança</p>
-        <h2>Simulação de balança RS232 / COM</h2>
+        <p class="eyebrow">Laboratório de pesagem • TCP / RS232</p>
+        <h2>Simulação de balanças</h2>
         <p>
-          Simule indicadores de pesagem em portas seriais RS232, de COM1 até COMXXX, com frames compatíveis com os drivers do All Driver Platform. Para o ADP obter peso no mesmo computador, use um par virtual COM: o simulador abre uma ponta e o ADP lê a outra.
+          Configure o protocolo e a conexão TCP ou RS232, inicie uma instância e acompanhe o peso e os quadros transmitidos. Em testes seriais no mesmo computador, use um par de portas COM virtuais.
         </p>
       </div>
       <div class="scale-hero-actions">
@@ -280,28 +280,28 @@ onUnmounted(suspendPolling);
     <div v-if="error" class="alert error">{{ error }}</div>
 
     <section class="dashboard-metrics-grid">
-      <div class="metric-card">
+      <div class="scale-metric-card">
         <div class="metric-icon">⚖</div>
         <div>
           <strong>{{ activeCount }}</strong>
           <span>Simuladores ativos</span>
         </div>
       </div>
-      <div class="metric-card">
+      <div class="scale-metric-card">
         <div class="metric-icon">🔌</div>
         <div>
           <strong>{{ totalClients }}</strong>
           <span>Conexões/portas abertas</span>
         </div>
       </div>
-      <div class="metric-card">
+      <div class="scale-metric-card">
         <div class="metric-icon">📡</div>
         <div>
           <strong>{{ serialPorts.length }}</strong>
           <span>Portas COM detectadas</span>
         </div>
       </div>
-      <div class="metric-card">
+      <div class="scale-metric-card">
         <div class="metric-icon">🧩</div>
         <div>
           <strong>{{ presets.length }}</strong>
@@ -317,17 +317,20 @@ onUnmounted(suspendPolling);
             <p class="eyebrow">Nova instância</p>
             <h3>Configurar simulador</h3>
           </div>
-          <button :disabled="starting" @click="start">{{ starting ? "Iniciando..." : "Iniciar" }}</button>
+          <button class="primary" :disabled="starting" @click="start">{{ starting ? "Iniciando..." : "Iniciar" }}</button>
         </div>
 
         <SavedScaleModels :config="form" @load="applySavedModel" />
-        <div class="preset-list">
+        <details class="protocol-catalog" open>
+          <summary>Protocolos prontos <span>{{ presets.length }} opções</span></summary>
+          <div class="preset-list">
           <button v-for="preset in presets" :key="preset.key" class="preset-button" type="button" @click="applyPreset(preset)">
             <strong>{{ preset.name }}</strong>
             <span>{{ preset.description }}</span>
             <small v-if="preset.adp_equipment">Equipamento ADP: {{ preset.adp_equipment }}</small>
           </button>
-        </div>
+          </div>
+        </details>
 
         <div class="form-grid compact">
           <label>
