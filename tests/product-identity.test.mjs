@@ -57,3 +57,14 @@ test('frame overrides are opt-in and reset when changing model', () => {
   assert.match(page, /v-if="form.frame_override_enabled"/);
   assert.match(page, /quadros incompatíveis ou intencionalmente inválidos/);
 });
+
+// These fields are installer registry keys, not cosmetic branding.
+test('Windows upgrade retains the exact publisher and product keys of stable 0.2.1',()=>{
+ const config=json('src-tauri/tauri.conf.json');
+ assert.equal(config.bundle.publisher,'WK Arts');
+ assert.equal(config.productName,'Scale Simulator');
+ assert.equal(config.identifier,'br.com.wkarts.scale-simulator-tauri');
+ assert.equal(config.bundle.windows.nsis.installMode ?? 'currentUser','currentUser');
+ assert.match(read('src-tauri/Cargo.toml'),/^name = "scale_simulator_tauri"$/m);
+ assert.equal(config.bundle.shortDescription,'Simulador de balanças TCP e RS232');
+});

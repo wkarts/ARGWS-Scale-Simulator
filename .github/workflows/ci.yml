@@ -130,17 +130,47 @@ jobs:
       - name: Validate PowerShell syntax
         shell: pwsh
         run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path "scripts/windows/build-windows.ps1"),
-            [ref]$tokens,
-            [ref]$errors
-          ) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            exit 1
+          foreach ($file in @('scripts/windows/build-windows.ps1', 'scripts/windows/test-installer-upgrade.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file), [ref]$tokens, [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              exit 1
+            }
           }
+
+  windows-installer-upgrade:
+    name: Windows installer upgrade from 0.2.1
+    needs: windows-build-script
+    runs-on: windows-2025
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      CARGO_TARGET_DIR: C:\scale-upgrade-target
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> C:/scale-upgrade-target
+          key: installer-upgrade-x64
+      - run: npm ci --no-audit --no-fund
+      - name: Build real Windows NSIS installer
+        run: npm run tauri -- build --target x86_64-pc-windows-msvc --bundles nsis
+      - name: Install, upgrade handoff and uninstall with data preservation
+        shell: pwsh
+        run: ./scripts/windows/test-installer-upgrade.ps1
 
   frontend:
     name: Vue, TypeScript and Web/PWA

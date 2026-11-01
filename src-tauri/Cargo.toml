@@ -1,7 +1,7 @@
 [package]
 name = "scale_simulator_tauri"
 version = "0.3.0"
-description = "Template corporativo em Rust, Tauri, Web/PWA, mobile e CloudPanel"
+description = "Simulador de balanças TCP e RS232"
 authors = ["Wallace Kleiton <wkarts@gmail.com>"]
 edition = "2021"
 
