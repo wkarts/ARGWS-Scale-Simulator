@@ -321,7 +321,7 @@ onUnmounted(suspendPolling);
         </div>
 
         <SavedScaleModels :config="form" @load="applySavedModel" />
-        <details class="protocol-catalog" open>
+        <details class="protocol-catalog">
           <summary>Protocolos prontos <span>{{ presets.length }} opções</span></summary>
           <div class="preset-list">
           <button v-for="preset in presets" :key="preset.key" class="preset-button" type="button" @click="applyPreset(preset)">

@@ -198,6 +198,7 @@ const groupState = reactive<Record<MenuSection, boolean>>({
 });
 
 const sections: { key: MenuSection; title: string; subtitle: string }[] = [
+  { key: "dashboard", title: "Principal", subtitle: "visão geral" },
   { key: "ferramentas", title: "Laboratório", subtitle: "pesagem TCP / RS232" },
   { key: "sistema", title: "Configurações", subtitle: "acesso e ambiente" },
   { key: "documentacao", title: "Ajuda", subtitle: "orientações e diagnóstico" },
@@ -909,7 +910,7 @@ onBeforeUnmount(() => {
             <small>{{ groupState[section.key] ? '−' : '+' }}</small>
           </button>
           <div v-show="groupState[section.key]" class="menu-links submenu-links professional-menu-links" :class="`submenu-${sidebarConfig.submenuVisualMode}`">
-            <RouterLink v-for="item in section.items" :key="item.route" :to="item.route" :title="item.title">
+            <RouterLink v-for="item in section.items" :key="item.route" :to="item.route" :title="item.title" active-class="" exact-active-class="menu-item-current">
               <span class="menu-link-icon" aria-hidden="true"><IconSymbol :name="iconNameForRoute(item.route)" :size="15" /></span>
               <span class="menu-link-label">{{ item.title }}</span>
             </RouterLink>

@@ -13,6 +13,7 @@ try{
  for(const width of [320,390,768,1366]){
   const page=await browser.newPage({viewport:{width,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/fixtures/laboratory.html`);
+  await page.locator('.protocol-catalog > summary').click();
   await page.locator('.preset-button').first().waitFor();
   assert.equal(await page.locator('.preset-button').count(),9);
   const tokens=await page.evaluate(()=>{const s=getComputedStyle(document.documentElement);return Object.fromEntries(['--primary','--accent','--page-bg','--text-muted','--app-font-family'].map(k=>[k,s.getPropertyValue(k).trim()]));});

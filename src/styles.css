@@ -153,7 +153,7 @@ a { color: inherit; }
   padding: 9px 10px;
   border-radius: 9px;
 }
-.sidebar a.router-link-active { background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
+.sidebar a.menu-item-current { background: var(--sidebar-active-bg); color: var(--sidebar-active-text); }
 
 .sidebar-footer-fixed {
   margin-top: auto;
@@ -1897,14 +1897,14 @@ select { appearance: auto; }
 }
 .professional-menu-links a::before { display: none !important; }
 .professional-menu-links a:hover { background: var(--sidebar-hover-bg); color: #fff; }
-.professional-menu-links a.router-link-active {
+.professional-menu-links a.menu-item-current {
   background: linear-gradient(135deg, var(--primary), var(--primary-hover));
   color: #fff;
   border-color: rgba(255,255,255,.10);
   box-shadow: 0 8px 22px rgba(0,0,0,.18);
 }
 .menu-link-icon { color: var(--sidebar-accent); font-size: 16px; line-height: 1; }
-.professional-menu-links a.router-link-active .menu-link-icon { color: #fff; }
+.professional-menu-links a.menu-item-current .menu-link-icon { color: #fff; }
 .professional-sidebar-footer { padding: 10px; gap: 8px; border-top-color: var(--sidebar-border); }
 .sidebar-status-card {
   min-height: 54px;
@@ -2307,7 +2307,7 @@ body { background: var(--page-bg); letter-spacing: -0.005em; }
   font-size: 12px;
   flex: 0 0 auto;
 }
-.professional-menu-links a.router-link-active .menu-link-icon {
+.professional-menu-links a.menu-item-current .menu-link-icon {
   background: rgba(255,255,255,.18);
 }
 .professional-sidebar-footer {
@@ -2665,7 +2665,7 @@ tbody td { height: 38px; }
   background: var(--sidebar-hover-bg) !important;
   color: var(--primary) !important;
 }
-.professional-menu-links a.router-link-active {
+.professional-menu-links a.menu-item-current {
   color: var(--sidebar-active-text) !important;
   background: linear-gradient(135deg, var(--primary), var(--primary-hover)) !important;
   box-shadow: 0 10px 22px color-mix(in srgb, var(--primary) 22%, transparent) !important;
@@ -2674,7 +2674,7 @@ tbody td { height: 38px; }
   color: var(--sidebar-accent) !important;
   background: color-mix(in srgb, var(--sidebar-accent) 10%, transparent) !important;
 }
-.professional-menu-links a.router-link-active .menu-link-icon {
+.professional-menu-links a.menu-item-current .menu-link-icon {
   color: #fff !important;
   background: rgba(255,255,255,.20) !important;
 }
