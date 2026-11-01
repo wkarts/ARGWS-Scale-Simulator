@@ -15,3 +15,7 @@ A ficha técnica passa a usar o SHA do código compilado, obtido do checkout, em
 - Capturas sintéticas anexadas ao job de frontend por um dia.
 
 Esses testes não substituem validação de hardware serial/TCP real. Não há alteração dos serviços ou protocolos do simulador.
+
+## Tema padrão V2
+
+O pacote de identidade aprovado fornece os tokens versionados em `src/assets/branding/theme.json`: azul profundo #102E49, azul-petróleo #176B87, verde-sinal #13B89D, fundo #F3F6FA, superfície #FFFFFF e texto secundário #65758A. A fonte local DejaVu Sans é carregada como ScaleSans. O tema Scale Signal é claro por padrão; o verde escuro #087F6D é reservado a texto com contraste, não substitui o verde-sinal da marca. Temas alternativos continuam opcionais. O teste Chromium confere os tokens computados, além da geometria dos controles, para detectar elementos recortados mesmo quando o contêiner oculta overflow.

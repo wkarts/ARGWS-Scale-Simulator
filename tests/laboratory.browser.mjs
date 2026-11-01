@@ -15,6 +15,8 @@ try{
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/fixtures/laboratory.html`);
   await page.locator('.preset-button').first().waitFor();
   assert.equal(await page.locator('.preset-button').count(),9);
+  const tokens=await page.evaluate(()=>{const s=getComputedStyle(document.documentElement);return Object.fromEntries(['--primary','--accent','--page-bg','--text-muted','--app-font-family'].map(k=>[k,s.getPropertyValue(k).trim()]));});
+  assert.equal(tokens['--primary'],'#102E49');assert.equal(tokens['--accent'],'#13B89D');assert.equal(tokens['--page-bg'],'#F3F6FA');assert.equal(tokens['--text-muted'],'#65758A');assert.match(tokens['--app-font-family'],/ScaleSans/);
   assert.equal(await page.locator('.scale-metric-card').count(),4);
   assert.equal(await page.locator('.preset-button').first().evaluate(e=>getComputedStyle(e).flexDirection),'column');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`simulation overflow ${width}`);
@@ -23,6 +25,8 @@ try{
   if(process.env.SCALE_UI_SCREENSHOTS){fs.mkdirSync(process.env.SCALE_UI_SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.SCALE_UI_SCREENSHOTS,`simulation-${width}.png`),fullPage:true});}
   await page.evaluate(()=>window.__go('/playground'));await page.locator('.playground-scale').waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`playground overflow ${width}`);
+  const clipped=await page.locator('.playground-launch button,.playground-launch select,.playground-controls button').evaluateAll(elements=>elements.filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&(r.left<0||r.right>innerWidth+1);}).map(e=>e.textContent?.trim()));
+  assert.deepEqual(clipped,[],`playground controls clipped at ${width}`);
   await page.locator('.playground-launch select').selectOption('one');assert.deepEqual(await page.evaluate(()=>window.__runtimeCalls),[]);
   await page.getByRole('button',{name:'Iniciar instância',exact:true}).click();await page.waitForFunction(()=>window.__runtimeCalls.includes('start'));assert.equal(await page.locator('.playground-scale').count(),2);
   if(process.env.SCALE_UI_SCREENSHOTS)await page.screenshot({path:path.join(process.env.SCALE_UI_SCREENSHOTS,`playground-${width}.png`),fullPage:true});

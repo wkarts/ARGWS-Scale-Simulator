@@ -279,7 +279,7 @@ onUnmounted(suspendPolling);
 
     <div v-if="error" class="alert error">{{ error }}</div>
 
-    <section class="dashboard-metrics-grid">
+    <section class="scale-metrics-grid">
       <div class="scale-metric-card">
         <div class="metric-icon">⚖</div>
         <div>

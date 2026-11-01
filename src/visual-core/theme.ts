@@ -1,3 +1,4 @@
+import approvedScaleTheme from "../assets/branding/theme.json";
 export type ThemeMode = "light" | "dark";
 export type ThemeDensity = "comfortable" | "compact" | "dense";
 
@@ -45,12 +46,24 @@ export const defaultThemeTypography: VisualThemeTypography = {
   fontFamily: "ScaleSans, Segoe UI, Arial, sans-serif",
   fontScale: 1,
   titleScale: 1,
-  textColor: "#0f172a",
-  mutedColor: "#64748b",
+  textColor: approvedScaleTheme.colors.primary,
+  mutedColor: approvedScaleTheme.colors.secondaryText,
 };
 
 export const visualThemePresets: VisualThemePreset[] = [
-  {id:"scale-signal",name:"Scale Signal",description:"Identidade V2 do Scale Simulator",colors:{primary:"#102E49",primaryHover:"#176B87",primarySoft:"#E3F2F5",accent:"#087F6D",sidebarStart:"#ffffff",sidebarEnd:"#F3F6FA",sidebarAccent:"#176B87"}},
+  {
+    id: "scale-signal", name: "Scale Signal", description: "Identidade V2 aprovada do Scale Simulator",
+    colors: {
+      primary: approvedScaleTheme.colors.primary,
+      primaryHover: approvedScaleTheme.colors.secondary,
+      primarySoft: "#E3F2F5",
+      accent: approvedScaleTheme.colors.accent,
+      sidebarStart: approvedScaleTheme.colors.surface,
+      sidebarEnd: approvedScaleTheme.colors.background,
+      sidebarAccent: approvedScaleTheme.colors.secondary,
+    },
+    typography: {...defaultThemeTypography},
+  },
   {
     id: "corporate-blue",
     name: "Azul corporativo claro",
@@ -418,7 +431,7 @@ export function applyVisualPreferences(preferences: UserVisualPreferences, custo
   root.style.setProperty("--app-font-family", typography.fontFamily);
   root.style.setProperty("--app-font-scale", String(typography.fontScale));
   root.style.setProperty("--app-title-scale", String(typography.titleScale));
-  if (preset.custom) {
+  {
     root.style.setProperty("--text-color", preferences.mode === "dark" ? "#e5edf8" : typography.textColor);
     root.style.setProperty("--text-muted", preferences.mode === "dark" ? "#aab7c8" : typography.mutedColor);
   }
