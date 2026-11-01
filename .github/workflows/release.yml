@@ -5,6 +5,11 @@ on:
     types: [completed]
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      resume_tag:
+        description: 'Retomar a mesma pre-release existente, sem criar ou mover tag'
+        required: false
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -38,6 +43,7 @@ jobs:
       - id: prepare
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_RESUME_TAG: ${{ inputs.resume_tag }}
           RELEASE_SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: node scripts/release/prepare-ci.mjs
   desktop:
@@ -123,8 +129,28 @@ jobs:
         if: steps.restore.outputs.restored != 'true'
       - run: node scripts/ci/check-version-sync.mjs --tag ${{ needs.prepare.outputs.tag }}
         if: steps.restore.outputs.restored != 'true'
-      - run: npm run tauri -- build --target ${{ matrix.target }}
+      - name: Build desktop with numeric MSI package version
         if: steps.restore.outputs.restored != 'true'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          EXTRA=()
+          if [[ "$TARGET" == *windows* ]]; then
+            node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const m = /^(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/.exec(process.env.RELEASE_VERSION || '');
+          if (!m) throw new Error('Unsupported MSI release version');
+          const parts = m.slice(1).map(v => Number(v || 0));
+          if (parts.some((v, i) => !Number.isSafeInteger(v) || v > (i < 2 ? 255 : 65535))) throw new Error('MSI numeric version out of range');
+          const config = {bundle: {windows: {wix: {version: parts.join('.')}}}};
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'scale-msi-config.json'), JSON.stringify(config));
+          NODE
+            EXTRA=(--config "$RUNNER_TEMP/scale-msi-config.json")
+          fi
+          npm run tauri -- build --target "$TARGET" "${EXTRA[@]}"
       - name: Collect platform bundles
         if: steps.restore.outputs.restored != 'true'
         shell: bash

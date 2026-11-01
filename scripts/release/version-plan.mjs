@@ -14,18 +14,9 @@ export function compare(a, b) {
 }
 export function planVersion(branch, current, tags) {
   if (!['main', 'develop'].includes(branch)) throw new Error('Releases only from main/develop');
-  const valid = tags.filter(t => /^v\d+\.\d+\.\d+(?:-beta\.\d+)?$/.test(t));
-  const stable = valid.filter(t => !t.includes('-')).sort(compare).at(-1);
-  let base = parseVersion(current).base.join('.');
-  if (branch === 'main') {
-    if (parseVersion(current).beta !== null) throw new Error('main must contain a stable version');
-    if (stable && compare(base, stable) < 0) throw new Error('Stable version cannot regress');
-    return { version: base, tag: `v${base}`, prerelease: false, existing: valid.includes(`v${base}`) };
-  }
-  if (!stable || compare(base, stable) <= 0) {
-    const parts = parseVersion(stable || base).base; parts[2]++; base = parts.join('.');
-  }
-  const numbers = valid.filter(t => t.startsWith(`v${base}-beta.`)).map(t => parseVersion(t).beta);
-  const version = `${base}-beta.${Math.max(0, ...numbers) + 1}`;
-  return { version, tag: `v${version}`, prerelease: true, existing: false };
+  if (parseVersion(current).beta !== null) throw new Error('Product version must use plain SemVer');
+  const valid = tags.filter(t => /^v\d+\.\d+\.\d+$/.test(t));
+  const latest = valid.sort(compare).at(-1);
+  if (latest && compare(current, latest) < 0) throw new Error('Version cannot regress');
+  return {version: current, tag: `v${current}`, prerelease: branch === 'develop', existing: valid.includes(`v${current}`)};
 }
