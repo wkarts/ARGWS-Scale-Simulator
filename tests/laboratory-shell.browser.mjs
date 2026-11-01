@@ -31,6 +31,7 @@ try{
   const model=page.getByRole('combobox',{name:'Modelo salvo',exact:true});await model.locator('option[value=one]').waitFor({state:'attached'});await model.selectOption('one');await page.getByRole('button',{name:'Carregar',exact:true}).click();assert.deepEqual(await page.evaluate(()=>window.__runtimeCalls),[]);
   await page.evaluate(()=>window.__go('/playground'));await page.locator('.playground-scale').waitFor();
   assert.equal(await page.locator('.professional-menu-links a.menu-item-current').count(),1);
+  if(width>=1024)assert.ok((await page.locator('.scale-playground-page > .page-header-card').boundingBox()).height<=85,'compact shared titlebar');
   assert.ok(await page.locator('.weight').first().evaluate(e=>parseFloat(getComputedStyle(e).fontSize))<=36,'weight does not scale with entire desktop width');
   if(width>=1300)assert.ok((await page.locator('.playground-scale').first().boundingBox()).width<650,'one instance does not stretch across entire workspace');
   assert.deepEqual(await page.locator('.playground-controls button').evaluateAll(xs=>xs.filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&(r.left<0||r.right>innerWidth+1);}).map(e=>e.textContent)),[]);
